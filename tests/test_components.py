@@ -3,10 +3,7 @@ import torch.nn.functional as F
 import sys
 import os
 
-# sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
 from src import activations
-
 
 def test_activation_functions():
     x = t.randn(100)
@@ -20,9 +17,26 @@ def test_activation_functions():
     assert t.allclose(activations.swish(x), F.silu(x))
     assert t.allclose(activations.swish(x2), F.silu(x2))
 
+def test_normalizers():
+    pass
+
+def test_embedding():
+    pass
+
+def test_linear():
+    pass
+
+def test_attention():
+    pass
+
+def test_mlp_blocks():
+    pass
 
 def run_all_tests():
     test_activation_functions()
+    test_normalizers()
+    test_embedding()
+    test_linear()
     print("All tests have passed!")
 
 if __name__ == '__main__':
