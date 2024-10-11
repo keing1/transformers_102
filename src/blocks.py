@@ -5,7 +5,7 @@ import einops
 import activations
 import layers
 
-# TODO: Add MoE, allow for GQA/MQA
+# TODO: Add MoE, allow for GQA/MQA, add RoPE and kv-caching
 
 class MLPBlock(nn.Module):
     def __init__(self, embed_dim: int, project_dim: int, activation: str):

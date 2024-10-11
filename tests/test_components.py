@@ -1,3 +1,4 @@
+import unittest
 import torch as t
 import torch.nn.functional as F
 import sys
@@ -5,39 +6,44 @@ import os
 
 from src import activations
 
-def test_activation_functions():
-    x = t.randn(100)
-    x2 = x.reshape((10,10))
-    assert t.allclose(activations.relu(x), F.relu(x))
-    assert t.allclose(activations.relu(x2), F.relu(x2))
+class TestTransformerComponents(unittest.TestCase):
+    def test_activation_functions(self):
+        x = t.randn(100)
+        x2 = x.reshape((10,10))
+        assert t.allclose(activations.relu(x), F.relu(x))
+        assert t.allclose(activations.relu(x2), F.relu(x2))
 
-    assert t.allclose(activations.gelu(x), F.gelu(x))
-    assert t.allclose(activations.gelu(x2), F.gelu(x2))
+        assert t.allclose(activations.gelu(x), F.gelu(x))
+        assert t.allclose(activations.gelu(x2), F.gelu(x2))
 
-    assert t.allclose(activations.swish(x), F.silu(x))
-    assert t.allclose(activations.swish(x2), F.silu(x2))
+        assert t.allclose(activations.swish(x), F.silu(x))
+        assert t.allclose(activations.swish(x2), F.silu(x2))
 
-def test_normalizers():
-    pass
+    def test_normalizers(self):
+        x = t.randn(100)
+        x2 = x.reshape((10,10))
 
-def test_embedding():
-    pass
+        W1
+        W2
+        b1
+        b2
 
-def test_linear():
-    pass
+        pass
 
-def test_attention():
-    pass
+    def test_embedding(self):
+        pass
 
-def test_mlp_blocks():
-    pass
+    def test_linear(self):
+        pass
 
-def run_all_tests():
-    test_activation_functions()
-    test_normalizers()
-    test_embedding()
-    test_linear()
-    print("All tests have passed!")
+    def test_attention_block(self):
+        pass
+
+    def test_mlp_blocks(self):
+        pass
+
+    def test_transformer_block(self):
+        pass
 
 if __name__ == '__main__':
-    run_all_tests()
+    unittest.main()
