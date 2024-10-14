@@ -32,6 +32,9 @@ class TestTransformerComponents(unittest.TestCase):
         torch_ln1 = t.nn.LayerNorm(x.shape[-1:])
         ln2 = layers.LayerNorm(x2.shape[-1:])
         torch_ln2 = t.nn.LayerNorm(x2.shape[-1:])
+
+        assert t.allclose(ln1.weight, torch_ln1.weight)
+        assert t.allclose(ln2.weight, torch_ln2.weight)
         
         ln1.weight, ln1.bias = W1, b1
         torch_ln1.weight, torch_ln1.bias = W1, b1
@@ -45,6 +48,9 @@ class TestTransformerComponents(unittest.TestCase):
         torch_rn1 = t.nn.RMSNorm(x.shape[-1:])
         rn2 = layers.RMSNorm(x2.shape[-1:])
         torch_rn2 = t.nn.RMSNorm(x2.shape[-1:])
+
+        assert t.allclose(rn1.weight, torch_rn1.weight)
+        assert t.allclose(rn2.weight, torch_rn2.weight)
         
         rn1.weight, rn1.bias = W1, b1
         torch_rn1.weight, torch_rn1.bias = W1, b1
