@@ -4,6 +4,7 @@ from typing import Tuple
 
 class LayerNorm(nn.Module):
     def __init__(self, data_shape: Tuple[int, ...], eps: float=1e-5, includes_bias: bool=True):
+        super().__init__()
         self.data_shape = data_shape
         self.eps = eps
         self.includes_bias = includes_bias
@@ -16,9 +17,9 @@ class LayerNorm(nn.Module):
         # Calcualte mean and variance over all dimensions but the first
         agg_dims = tuple(range(1, len(x.shape)))
         x_mean = t.mean(x, dim=agg_dims, keepdim=True)
-        x_var = t.var(x, dim=agg_dims, keepdim=True)
+        x_var = t.var(x, dim=agg_dims, keepdim=True, correction=0)
 
-        normed_x = (x - x_mean)/(t.sqrt(x_var)+self.eps)
+        normed_x = (x - x_mean)/(t.sqrt(x_var+self.eps))
 
         if self.includes_bias:
             out_x = normed_x * self.weight + self.bias
@@ -27,7 +28,8 @@ class LayerNorm(nn.Module):
         return out_x
 
 class RMSNorm(nn.Module):
-    def __init__(self, data_shape: Tuple[int, ...], eps: float=1e-5):
+    def __init__(self, data_shape: Tuple[int, ...], eps: float=0):
+        super().__init__()
         self.data_shape = data_shape
         self.eps = eps
 
@@ -44,6 +46,7 @@ class RMSNorm(nn.Module):
 
 class Embedding(nn.Module):
     def __init__(self, num_embeds: int, embed_dim: int):
+        super().__init__()
         self.num_embeds = num_embeds
         self.embed_dim = embed_dim
 
@@ -55,6 +58,7 @@ class Embedding(nn.Module):
 
 class Linear(nn.Module):
     def __init__(self, in_dim: int, out_dim: int, includes_bias: bool=True):
+        super().__init__()
         self.in_dim = in_dim
         self.out_dim = out_dim
         self.includes_bias = includes_bias

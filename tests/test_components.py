@@ -4,7 +4,7 @@ import torch.nn.functional as F
 import sys
 import os
 
-from src import activations
+from src import activations, layers, blocks
 
 class TestTransformerComponents(unittest.TestCase):
     def test_activation_functions(self):
@@ -23,12 +23,37 @@ class TestTransformerComponents(unittest.TestCase):
         x = t.randn(100)
         x2 = x.reshape((10,10))
 
-        W1
-        W2
-        b1
-        b2
+        W1 = t.nn.Parameter(t.randn(100))
+        b1 = t.nn.Parameter(t.randn(100))
+        W2 = t.nn.Parameter(t.randn(10))
+        b2 = t.nn.Parameter(t.randn(10))
 
-        pass
+        ln1 = layers.LayerNorm(x.shape[-1:])
+        torch_ln1 = t.nn.LayerNorm(x.shape[-1:])
+        ln2 = layers.LayerNorm(x2.shape[-1:])
+        torch_ln2 = t.nn.LayerNorm(x2.shape[-1:])
+        
+        ln1.weight, ln1.bias = W1, b1
+        torch_ln1.weight, torch_ln1.bias = W1, b1
+        ln2.weight, ln2.bias = W2, b2
+        torch_ln2.weight, torch_ln2.bias = W2, b2
+
+        assert t.allclose(ln1(x), torch_ln1(x))
+        assert t.allclose(ln2(x2), torch_ln2(x2))
+
+        rn1 = layers.RMSNorm(x.shape[-1:])
+        torch_rn1 = t.nn.RMSNorm(x.shape[-1:])
+        rn2 = layers.RMSNorm(x2.shape[-1:])
+        torch_rn2 = t.nn.RMSNorm(x2.shape[-1:])
+        
+        rn1.weight, rn1.bias = W1, b1
+        torch_rn1.weight, torch_rn1.bias = W1, b1
+        rn2.weight, rn2.bias = W2, b2
+        torch_rn2.weight, torch_rn2.bias = W2, b2
+
+        assert t.allclose(rn1(x), torch_rn1(x))
+        assert t.allclose(rn2(x2), torch_rn2(x2))
+
 
     def test_embedding(self):
         pass

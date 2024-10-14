@@ -2,13 +2,13 @@ import torch as t
 from torch import nn
 import einops
 
-import activations
-import layers
+from src import activations, layers
 
 # TODO: Add MoE, allow for GQA/MQA, add RoPE and kv-caching
 
 class MLPBlock(nn.Module):
     def __init__(self, embed_dim: int, project_dim: int, activation: str):
+        super().__init__()
         self.embed_dim = embed_dim
         self.project_dim = project_dim
 
@@ -30,6 +30,7 @@ class MLPBlock(nn.Module):
 
 class GLUBlock(nn.Module):
     def __init__(self, embed_dim: int, project_dim: int, activation: str):
+        super().__init__()
         self.embed_dim = embed_dim
         self.project_dim = project_dim
 
@@ -55,6 +56,7 @@ class MoEBlock(nn.Module):
 
 class MultiheadAttentionBlock(nn.Module):
     def __init__(self, embed_dim: int, num_heads: int):
+        super().__init__()
         self.embed_dim = embed_dim
         self.num_heads = num_heads
 
@@ -89,6 +91,7 @@ class MultiheadAttentionBlock(nn.Module):
 
 class TransformerDecoderBlock(nn.Module):
     def __init__(self, embed_dim: int, num_heads: int, project_dim: int, mlp_type:str, activation: str, norm_type: str, use_pre_norm: bool=True, parallel_layers: bool=False):
+        super().__init__()
         self.embed_dim = embed_dim
         self.num_heads = num_heads
 
