@@ -19,6 +19,9 @@ class TestTransformerComponents(unittest.TestCase):
         assert t.allclose(activations.swish(x), F.silu(x))
         assert t.allclose(activations.swish(x2), F.silu(x2))
 
+        assert t.allclose(activations.sigmoid(x), F.sigmoid(x))
+        assert t.allclose(activations.sigmoid(x2), F.sigmoid(x2))
+
     def test_normalizers(self):
         x = t.randn(100)
         x2 = x.reshape((10,10))
@@ -102,6 +105,45 @@ class TestTransformerComponents(unittest.TestCase):
         pass
 
     def test_mlp_blocks(self):
+        embed_dim = 10
+        project_dim = 40
+        activation = 'relu'
+
+        W1 = t.nn.Parameter(t.randn((project_dim, embed_dim)))
+        b1 = t.nn.Parameter(t.randn(project_dim,))
+        W2 = t.nn.Parameter(t.randn((embed_dim, project_dim)))
+        b2 = t.nn.Parameter(t.randn((embed_dim,)))
+
+        mlp = blocks.MLPBlock(embed_dim, project_dim, activation)
+        torch_lin1 = t.nn.Linear(embed_dim, project_dim)
+        torch_lin2 = t.nn.Linear(project_dim, embed_dim)
+        
+        mlp.linear1.weight, mlp.linear1.bias = W1, b1
+        torch_lin1.weight, torch_lin1.bias = W1, b1
+        mlp.linear2.weight, mlp.linear2.bias = W2, b2
+        torch_lin2.weight, torch_lin2.bias = W2, b2
+
+        torch_mlp = t.nn.Sequential(torch_lin1, t.nn.ReLU(), torch_lin2)
+        
+        x = t.arange(10).float()
+        x2 = t.arange(20).reshape((2,10)).float()
+
+        assert t.allclose(mlp(x), torch_mlp(x))
+        assert t.allclose(mlp(x2), torch_mlp(x2))
+        
+        W1 = t.nn.Parameter(t.randn((project_dim, embed_dim)))
+        b1 = t.nn.Parameter(t.randn(project_dim,))
+        W2 = t.nn.Parameter(t.randn((project_dim, embed_dim)))
+        b2 = t.nn.Parameter(t.randn(project_dim,))
+        W3 = t.nn.Parameter(t.randn((embed_dim, project_dim)))
+        b3 = t.nn.Parameter(t.randn((embed_dim,)))
+
+        glu = blocks.GLUBlock(embed_dim, project_dim, activation)
+        torch_lin1 = t.nn.Linear(embed_dim, project_dim)
+        torch_lin2 = t.nn.Linear(embed_dim, project_dim)
+        torch_lin3 = t.nn.Linear(project_dim, embed_dim)
+        
+        # TODO: Add MoE test
         pass
 
     def test_transformer_block(self):

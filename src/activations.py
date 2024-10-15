@@ -9,3 +9,6 @@ def gelu(x: t.Tensor) -> t.Tensor:
 
 def swish(x: t.Tensor, beta: float=1) -> t.Tensor:
     return x / (1 + t.exp(-beta * x))
+
+def sigmoid(x: t.Tensor) -> t.Tensor:
+    return 1/(1+t.exp(-x))

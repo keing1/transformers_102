@@ -55,6 +55,7 @@ class MoEBlock(nn.Module):
     pass
 
 class MultiheadAttentionBlock(nn.Module):
+    # Includes the calculation of Q, K, and V
     def __init__(self, embed_dim: int, num_heads: int):
         super().__init__()
         self.embed_dim = embed_dim
@@ -70,7 +71,6 @@ class MultiheadAttentionBlock(nn.Module):
         self.linear_o = layers.Linear(embed_dim, embed_dim)
     
     def forward(self, x: t.Tensor, decoder: bool=True) -> t.Tensor:
-        # Includes the calculation of Q, K, and V
         Q = einops.rearrange(self.linear_q(x), 'b s (head d_head) -> b head s d_head', n=self.num_heads)
         K = einops.rearrange(self.linear_k(x), 'b s (head d_head) -> b head s d_head', n=self.num_heads)
         V = einops.rearrange(self.linear_v(x), 'b s (head d_head) -> b head s d_head', n=self.num_heads)
