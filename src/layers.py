@@ -45,13 +45,13 @@ class RMSNorm(nn.Module):
     
 
 class Embedding(nn.Module):
-    def __init__(self, num_embeds: int, embed_dim: int):
+    def __init__(self, num_embeddings: int, embedding_dim: int):
         super().__init__()
-        self.num_embeds = num_embeds
-        self.embed_dim = embed_dim
+        self.num_embeddings = num_embeddings
+        self.embedding_dim = embedding_dim
 
         # Using default pytorch initialization
-        self.weight = nn.Parameter(t.randn(num_embeds, embed_dim))
+        self.weight = nn.Parameter(t.randn(num_embeddings, embedding_dim))
 
     def forward(self, x: t.Tensor) -> t.Tensor:
         return self.weight[x]

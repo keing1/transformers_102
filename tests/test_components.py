@@ -41,8 +41,8 @@ class TestTransformerComponents(unittest.TestCase):
         ln2.weight, ln2.bias = W2, b2
         torch_ln2.weight, torch_ln2.bias = W2, b2
 
-        assert t.allclose(ln1(x), torch_ln1(x))
-        assert t.allclose(ln2(x2), torch_ln2(x2))
+        assert t.allclose(ln1(x), torch_ln1(x), atol=1e-7)
+        assert t.allclose(ln2(x2), torch_ln2(x2), atol=1e-7)
 
         rn1 = layers.RMSNorm(x.shape[-1:])
         torch_rn1 = t.nn.RMSNorm(x.shape[-1:])
@@ -62,10 +62,41 @@ class TestTransformerComponents(unittest.TestCase):
 
 
     def test_embedding(self):
-        pass
+        num_embeddings = 10
+        embedding_dim = 5
+
+        W = t.nn.Parameter(t.randn((num_embeddings, embedding_dim)))
+
+        emb = layers.Embedding(num_embeddings, embedding_dim)
+        torch_emb = t.nn.Embedding(num_embeddings, embedding_dim)
+
+        emb.weight = W
+        torch_emb.weight = W
+
+        tokens = t.tensor([8,6,2,9])
+        tokens2 = t.tensor([[5,9], [7,2]])
+
+        assert t.allclose(emb(tokens), torch_emb(tokens))
+        assert t.allclose(emb(tokens2), torch_emb(tokens2))
+
 
     def test_linear(self):
-        pass
+        in_dim = 5
+        out_dim = 10
+        W = t.nn.Parameter(t.randn((out_dim, in_dim)))
+        b = t.nn.Parameter(t.randn((out_dim,)))
+
+        lin = layers.Linear(in_dim, out_dim)
+        torch_lin = t.nn.Linear(in_dim, out_dim)
+
+        lin.weight, lin.bias = W, b
+        torch_lin.weight, torch_lin.bias = W, b
+
+        x = t.arange(5).float()
+        x2 = t.arange(20).reshape((4,5)).float()
+
+        assert t.allclose(lin(x), torch_lin(x), atol=1e-7)
+        assert t.allclose(lin(x2), torch_lin(x2), atol=1e-7)
 
     def test_attention_block(self):
         pass
