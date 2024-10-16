@@ -131,19 +131,19 @@ class TestTransformerComponents(unittest.TestCase):
         assert t.allclose(mlp(x), torch_mlp(x))
         assert t.allclose(mlp(x2), torch_mlp(x2))
         
-        W1 = t.nn.Parameter(t.randn((project_dim, embed_dim)))
-        b1 = t.nn.Parameter(t.randn(project_dim,))
-        W2 = t.nn.Parameter(t.randn((project_dim, embed_dim)))
-        b2 = t.nn.Parameter(t.randn(project_dim,))
-        W3 = t.nn.Parameter(t.randn((embed_dim, project_dim)))
-        b3 = t.nn.Parameter(t.randn((embed_dim,)))
+        # W1 = t.nn.Parameter(t.randn((project_dim, embed_dim)))
+        # b1 = t.nn.Parameter(t.randn(project_dim,))
+        # W2 = t.nn.Parameter(t.randn((project_dim, embed_dim)))
+        # b2 = t.nn.Parameter(t.randn(project_dim,))
+        # W3 = t.nn.Parameter(t.randn((embed_dim, project_dim)))
+        # b3 = t.nn.Parameter(t.randn((embed_dim,)))
 
-        glu = blocks.GLUBlock(embed_dim, project_dim, activation)
-        torch_lin1 = t.nn.Linear(embed_dim, project_dim)
-        torch_lin2 = t.nn.Linear(embed_dim, project_dim)
-        torch_lin3 = t.nn.Linear(project_dim, embed_dim)
+        # glu = blocks.GLUBlock(embed_dim, project_dim, activation)
+        # torch_lin1 = t.nn.Linear(embed_dim, project_dim)
+        # torch_lin2 = t.nn.Linear(embed_dim, project_dim)
+        # torch_lin3 = t.nn.Linear(project_dim, embed_dim)
         
-        # TODO: Add MoE test
+        # TODO: Add GLU and MoE test
         pass
 
     def test_transformer_block(self):

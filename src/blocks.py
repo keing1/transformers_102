@@ -18,8 +18,10 @@ class MLPBlock(nn.Module):
             self.activation = activations.gelu
         elif activation == 'swish':
             self.activation = activations.swish
+        elif activation == 'sigmoid':
+            self.activation = activations.sigmoid
         else:
-            raise NotImplementedError("Only relu, gelu, and swish activation functions are implemented.")
+            raise NotImplementedError("Only relu, gelu, swish, and sigmoid activation functions are implemented.")
 
         self.linear1 = layers.Linear(self.embed_dim, self.project_dim)
         self.linear2 = layers.Linear(self.project_dim, self.embed_dim)
@@ -40,8 +42,10 @@ class GLUBlock(nn.Module):
             self.activation = activations.gelu
         elif activation == 'swish':
             self.activation = activations.swish
+        elif activation == 'sigmoid':
+            self.activation = activations.sigmoid
         else:
-            raise NotImplementedError("Only relu, gelu, and swish activation functions are implemented.")
+            raise NotImplementedError("Only relu, gelu, swish, and sigmoid activation functions are implemented.")
 
         self.linear1 = layers.Linear(self.embed_dim, self.project_dim)
         self.linear2 = layers.Linear(self.embed_dim, self.project_dim)
@@ -51,7 +55,7 @@ class GLUBlock(nn.Module):
         x = self.activation(self.linear1(x)) * self.linear2(x)
         return self.linear3(x)
 
-class MoEBlock(nn.Module):
+class MixtureofExpertsBlock(nn.Module):
     pass
 
 class MultiheadAttentionBlock(nn.Module):
