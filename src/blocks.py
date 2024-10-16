@@ -1,6 +1,7 @@
 import torch as t
 from torch import nn
 import einops
+from typing import Optional
 
 from src import activations, layers
 
@@ -94,7 +95,7 @@ class MultiheadAttentionBlock(nn.Module):
         return self.linear_o(res)
 
 class TransformerDecoderBlock(nn.Module):
-    def __init__(self, embed_dim: int, num_heads: int, project_dim: int, mlp_type:str, activation: str, norm_type: str, use_pre_norm: bool=True, parallel_layers: bool=False):
+    def __init__(self, embed_dim: int, num_heads: int, project_dim: int, mlp_type:str, activation: str, norm_type: str, use_pre_norm: bool=True, parallel_layers: bool=False, dropout_rate: Optional[float]=None):
         super().__init__()
         self.embed_dim = embed_dim
         self.num_heads = num_heads
