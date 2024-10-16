@@ -8,7 +8,7 @@ from src import activations, layers
 # TODO: Add MoE, allow for GQA/MQA, add RoPE and kv-caching
 
 class MLPBlock(nn.Module):
-    def __init__(self, embed_dim: int, project_dim: int, activation: str):
+    def __init__(self, embed_dim: int, project_dim: int, activation: str, dropout_rate: Optional[float]=None):
         super().__init__()
         self.embed_dim = embed_dim
         self.project_dim = project_dim
@@ -27,12 +27,20 @@ class MLPBlock(nn.Module):
         self.linear1 = layers.Linear(self.embed_dim, self.project_dim)
         self.linear2 = layers.Linear(self.project_dim, self.embed_dim)
 
+        self.dropout_rate = dropout_rate
+        if self.dropout_rate:
+            self.dropout_layer = layers.Dropout(self.dropout_rate)
+
     def forward(self, x: t.Tensor) -> t.Tensor:
-        return self.linear2(self.activation(self.linear1(x)))
+        x = self.linear2(self.activation(self.linear1(x)))
+        if self.dropout_rate:
+            return self.dropout_layer(x)
+        else:
+            return x
 
 
 class GLUBlock(nn.Module):
-    def __init__(self, embed_dim: int, project_dim: int, activation: str):
+    def __init__(self, embed_dim: int, project_dim: int, activation: str, dropout_rate: Optional[float]=None):
         super().__init__()
         self.embed_dim = embed_dim
         self.project_dim = project_dim
@@ -52,16 +60,24 @@ class GLUBlock(nn.Module):
         self.linear2 = layers.Linear(self.embed_dim, self.project_dim)
         self.linear3 = layers.Linear(self.project_dim, self.embed_dim)
 
+        self.dropout_rate = dropout_rate
+        if self.dropout_rate:
+            self.dropout_layer = layers.Dropout(self.dropout_rate)
+
     def forward(self, x: t.Tensor) -> t.Tensor:
         x = self.activation(self.linear1(x)) * self.linear2(x)
-        return self.linear3(x)
+        x = self.linear3(x)
+        if self.dropout_rate:
+            return self.dropout_layer(x)
+        else:
+            return x
 
 class MixtureofExpertsBlock(nn.Module):
     pass
 
 class MultiheadAttentionBlock(nn.Module):
     # Includes the calculation of Q, K, and V
-    def __init__(self, embed_dim: int, num_heads: int):
+    def __init__(self, embed_dim: int, num_heads: int, dropout_rate: Optional[float]=None):
         super().__init__()
         self.embed_dim = embed_dim
         self.num_heads = num_heads
@@ -74,6 +90,10 @@ class MultiheadAttentionBlock(nn.Module):
         self.linear_k = layers.Linear(embed_dim, embed_dim)
         self.linear_v = layers.Linear(embed_dim, embed_dim)
         self.linear_o = layers.Linear(embed_dim, embed_dim)
+
+        self.dropout_rate = dropout_rate
+        if self.dropout_rate:
+            self.dropout_layer = layers.Dropout(self.dropout_rate)
     
     def forward(self, x: t.Tensor, decoder: bool=True) -> t.Tensor:
         Q = einops.rearrange(self.linear_q(x), 'b s (head d_head) -> b head s d_head', n=self.num_heads)
@@ -92,7 +112,11 @@ class MultiheadAttentionBlock(nn.Module):
 
         res = t.einsum('b head s_q s, b head s d_head -> b head s_q d_head', att_pattern, V)
         res = einops.rearrange(res, 'b head s d_head -> b s (head d_head)')
-        return self.linear_o(res)
+        x = self.linear_o(res)
+        if self.dropout_rate:
+            return self.dropout_layer(x)
+        else:
+            return x
 
 class TransformerDecoderBlock(nn.Module):
     def __init__(self, embed_dim: int, num_heads: int, project_dim: int, mlp_type:str, activation: str, norm_type: str, use_pre_norm: bool=True, parallel_layers: bool=False, dropout_rate: Optional[float]=None):
@@ -114,11 +138,13 @@ class TransformerDecoderBlock(nn.Module):
             self.norm_layer2 = self.norm_type((self.embed_dim,))
         self.use_pre_norm = use_pre_norm
 
-        self.mha_block = MultiheadAttentionBlock(embed_dim, num_heads)
+        self.dropout_rate = dropout_rate
+        
+        self.mha_block = MultiheadAttentionBlock(embed_dim, num_heads, dropout_rate=self.dropout_rate)
         if mlp_type == 'mlpblock':
-            self.mlp_block = MLPBlock(embed_dim, project_dim, activation)
+            self.mlp_block = MLPBlock(embed_dim, project_dim, activation, dropout_rate=self.dropout_rate)
         elif mlp_type == 'glublock':
-            self.mlp_block = GLUBlock(embed_dim, project_dim, activation)
+            self.mlp_block = GLUBlock(embed_dim, project_dim, activation, dropout_rate=self.dropout_rate)
         else:
             raise NotImplementedError("MLP types other than mlpblock and glublock have not been implemented.")
 

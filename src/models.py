@@ -36,10 +36,10 @@ class GPT2Model(t.nn.Module):
     def forward(self, x: t.Tensor) -> t.Tensor:
         x = self.embedding_layer(x)
         x = self.init_dropout_layer(x)
-        # TODO: Add dropout option in transformer subblocks and block
         for block in self.transformer_blocks:
             x = block(x)
         x = self.final_ln(x)
+
         # Tied unembedding
         x = t.einsum('th, ...h -> ...t', self.embedding_layer.token_embedding_layer, x)
 
