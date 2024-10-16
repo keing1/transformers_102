@@ -74,4 +74,16 @@ class Linear(nn.Module):
         if self.includes_bias:
             x += self.bias
         return x
-        
+
+class Dropout(nn.Module):
+    def __init__(self, dropout_rate: float):
+        self.dropout_rate = dropout_rate
+    
+    def forward(self, x: t.Tensor) -> t.Tensor:
+        if self.training:
+            random_mask = t.random(x.shape) > self.dropout_rate
+            x *= random_mask
+            x *= 1/(1-self.dropout_rate)
+            return x
+        else:
+            return x
