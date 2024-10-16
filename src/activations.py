@@ -1,5 +1,6 @@
 import torch as t
 from scipy.stats import norm
+import einops
 
 def relu(x: t.Tensor) -> t.Tensor:
     return t.maximum(x, t.zeros(x.shape))
@@ -12,3 +13,11 @@ def swish(x: t.Tensor, beta: float=1) -> t.Tensor:
 
 def sigmoid(x: t.Tensor) -> t.Tensor:
     return 1/(1+t.exp(-x))
+
+def softmax(x: t.Tensor) -> t.Tensor:
+    # Subtracting max for stability
+    x_max = einops.reduce(x, '... d -> ... 1', 'max')
+    x -= x_max
+    x = t.exp(x)
+
+    return x/einops.reduce(x, '... d -> ... 1', 'sum')
