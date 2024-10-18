@@ -102,7 +102,38 @@ class TestTransformerComponents(unittest.TestCase):
         assert t.allclose(lin(x2), torch_lin(x2), atol=1e-7)
 
     def test_attention_block(self):
-        pass
+        embed_dim = 10
+        num_heads = 2
+
+        Wq = t.nn.Parameter(t.randn((embed_dim, embed_dim)))
+        Wk = t.nn.Parameter(t.randn((embed_dim, embed_dim)))
+        Wv = t.nn.Parameter(t.randn((embed_dim, embed_dim)))
+        Wo = t.nn.Parameter(t.randn((embed_dim, embed_dim)))
+
+        bq = t.nn.Parameter(t.randn((embed_dim,)))
+        bk = t.nn.Parameter(t.randn((embed_dim,)))
+        bv = t.nn.Parameter(t.randn((embed_dim,)))
+        bo = t.nn.Parameter(t.randn((embed_dim,)))
+
+        t_linq = layers.Linear(embed_dim, embed_dim)
+        t_link = layers.Linear(embed_dim, embed_dim)
+        t_linv = layers.Linear(embed_dim, embed_dim)
+
+        t_linq.weight, t_linq.bias = Wq, bq
+        t_link.weight, t_link.bias = Wk, bk
+        t_linv.weight, t_linv.bias = Wv, bv
+
+        x = t.arange(40).reshape((4,10)).float()
+        x2 = t.arange(80).reshape((2,4,10)).float()
+
+        attn_mask = t.where(t.arange(4).unsqueeze(1) < t.arange(4), -t.inf, 0)
+
+        mha = blocks.MultiheadAttentionBlock(embed_dim, num_heads)
+        t_mha = t.nn.MultiheadAttention(embed_dim, num_heads)
+        t_mha.out_proj.weight, t_mha.out_proj.bias = Wo, bo
+
+        assert t.allclose(mha(x, attention_mask=attn_mask), t_mha(t_linq(x), t_link(x), t_linv(x), attn_mask=attn_mask))
+        assert t.allclose(mha(x2, attention_mask=attn_mask), t_mha(t_linq(x2), t_link(x2), t_linv(x2), attn_mask=attn_mask))
 
     def test_mlp_blocks(self):
         embed_dim = 10
