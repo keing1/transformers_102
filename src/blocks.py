@@ -91,8 +91,10 @@ class MultiheadAttentionBlock(nn.Module):
         self.linear_o = layers.Linear(embed_dim, embed_dim)
 
         self.dropout_rate = dropout_rate
+        # Optionally has dropout layers after the attention pattern softmax and at the end of the block like in GPT-2
         if self.dropout_rate:
-            self.dropout_layer = layers.Dropout(self.dropout_rate)
+            self.dropout_layer_1 = layers.Dropout(self.dropout_rate)
+            self.dropout_layer_2 = layers.Dropout(self.dropout_rate)
     
     def forward(self, x: t.Tensor, attention_mask: Optional[t.Tensor]=None) -> t.Tensor:
         Q = einops.rearrange(self.linear_q(x), '... s (head dhead) -> ... head s dhead', head=self.num_heads)
@@ -106,14 +108,16 @@ class MultiheadAttentionBlock(nn.Module):
             pre_att_pattern += attention_mask
 
         att_pattern = t.softmax(pre_att_pattern, dim=-1)
+        if self.dropout_rate is not None:
+            att_pattern = self.dropout_layer_1(att_pattern)
 
         res = t.einsum('... h s t, ... h t d -> ... h s d', att_pattern, V)
         res = einops.rearrange(res, '... head s dhead -> ... s (head dhead)')
-        x = self.linear_o(res)
-        if self.dropout_rate:
-            return self.dropout_layer(x)
+        res = self.linear_o(res)
+        if self.dropout_rate is not None:
+            return self.dropout_layer_2(res)
         else:
-            return x
+            return res
 
 class TransformerDecoderBlock(nn.Module):
     def __init__(self, embed_dim: int, num_heads: int, project_dim: int, mlp_type:str, activation: str, norm_type: str, use_pre_norm: bool=True, parallel_layers: bool=False, dropout_rate: Optional[float]=None):
