@@ -95,18 +95,16 @@ class MultiheadAttentionBlock(nn.Module):
         if self.dropout_rate:
             self.dropout_layer = layers.Dropout(self.dropout_rate)
     
-    def forward(self, x: t.Tensor, decoder: bool=True) -> t.Tensor:
+    def forward(self, x: t.Tensor, attention_mask: Optional[t.Tensor]=None) -> t.Tensor:
         Q = einops.rearrange(self.linear_q(x), 'b s (head d_head) -> b head s d_head', n=self.num_heads)
         K = einops.rearrange(self.linear_k(x), 'b s (head d_head) -> b head s d_head', n=self.num_heads)
         V = einops.rearrange(self.linear_v(x), 'b s (head d_head) -> b head s d_head', n=self.num_heads)
 
         pre_att_pattern = t.einsum('b head s_q d_head, b head s_k d_head -> b head s_q s_k', Q, K)
         pre_att_pattern /= self.head_dim ** 0.5
-        if decoder:
-            # Building a decoder mask where all entries above the diagonal are negative infinity and all others are zero
-            seq_len = pre_att_pattern.shape[-1]
-            att_mat = t.where(t.arange(seq_len).unsqueeze(1) < t.arange(seq_len), -t.inf, 0)
-            pre_att_pattern += att_mat
+
+        if attention_mask:
+            pre_att_pattern += attention_mask
 
         att_pattern = t.softmax(pre_att_pattern, dim=-1)
 
@@ -139,7 +137,7 @@ class TransformerDecoderBlock(nn.Module):
         self.use_pre_norm = use_pre_norm
 
         self.dropout_rate = dropout_rate
-        
+
         self.mha_block = MultiheadAttentionBlock(embed_dim, num_heads, dropout_rate=self.dropout_rate)
         if mlp_type == 'mlpblock':
             self.mlp_block = MLPBlock(embed_dim, project_dim, activation, dropout_rate=self.dropout_rate)
@@ -151,14 +149,18 @@ class TransformerDecoderBlock(nn.Module):
         self.parallel_layers = parallel_layers
 
     def forward(self, x: t.Tensor) -> t.Tensor:
+        # Building a decoder mask where all entries above the diagonal are negative infinity and all others are zero
+        seq_len = x.shape[-1]
+        att_mask = t.where(t.arange(seq_len).unsqueeze(1) < t.arange(seq_len), -t.inf, 0)
+
         if self.parallel_layers:
             if self.use_pre_norm:
-                return x + self.mha_block(self.norm_layer1(x)) + self.mlp_block(self.norm_layer2(x))
+                return x + self.mha_block(self.norm_layer1(x), attention_mask=att_mask) + self.mlp_block(self.norm_layer2(x))
             else:
                 # Not sure if anyone has actually done this
-                return self.norm_layer1(x + self.mha_block(x) + self.mlp_block(x))
+                return self.norm_layer1(x + self.mha_block(x, attention_mask=att_mask) + self.mlp_block(x))
         else:
             if self.use_pre_norm:
-                return x + self.mlp_block(self.norm_layer2(x + self.mha_block(self.norm_layer1(x))))
+                return x + self.mlp_block(self.norm_layer2(x + self.mha_block(self.norm_layer1(x), attention_mask=att_mask)))
             else:
-                return self.norm_layer2(x + self.mlp_block(self.norm_layer1(x + self.mha_block(x))))
+                return self.norm_layer2(x + self.mlp_block(self.norm_layer1(x + self.mha_block(x, attention_mask=att_mask))))

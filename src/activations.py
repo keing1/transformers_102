@@ -19,5 +19,4 @@ def softmax(x: t.Tensor) -> t.Tensor:
     x_max = einops.reduce(x, '... d -> ... 1', 'max')
     x -= x_max
     x = t.exp(x)
-
     return x/einops.reduce(x, '... d -> ... 1', 'sum')
