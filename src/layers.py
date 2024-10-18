@@ -77,6 +77,7 @@ class Linear(nn.Module):
 
 class Dropout(nn.Module):
     def __init__(self, dropout_rate: float):
+        super().__init__()
         self.dropout_rate = dropout_rate
     
     def forward(self, x: t.Tensor) -> t.Tensor:
