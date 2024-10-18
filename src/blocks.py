@@ -76,7 +76,6 @@ class MixtureofExpertsBlock(nn.Module):
     pass
 
 class MultiheadAttentionBlock(nn.Module):
-    # Includes the calculation of Q, K, and V
     def __init__(self, embed_dim: int, num_heads: int, dropout_rate: Optional[float]=None):
         super().__init__()
         self.embed_dim = embed_dim
@@ -96,20 +95,20 @@ class MultiheadAttentionBlock(nn.Module):
             self.dropout_layer = layers.Dropout(self.dropout_rate)
     
     def forward(self, x: t.Tensor, attention_mask: Optional[t.Tensor]=None) -> t.Tensor:
-        Q = einops.rearrange(self.linear_q(x), 'b s (head d_head) -> b head s d_head', n=self.num_heads)
-        K = einops.rearrange(self.linear_k(x), 'b s (head d_head) -> b head s d_head', n=self.num_heads)
-        V = einops.rearrange(self.linear_v(x), 'b s (head d_head) -> b head s d_head', n=self.num_heads)
+        Q = einops.rearrange(self.linear_q(x), '... s (head dhead) -> ... head s dhead', head=self.num_heads)
+        K = einops.rearrange(self.linear_k(x), '... s (head dhead) -> ... head s dhead', head=self.num_heads)
+        V = einops.rearrange(self.linear_v(x), '... s (head dhead) -> ... head s dhead', head=self.num_heads)
 
-        pre_att_pattern = t.einsum('b head s_q d_head, b head s_k d_head -> b head s_q s_k', Q, K)
+        pre_att_pattern = t.einsum('... h s d, ... h t d -> ... h s t', Q, K)
         pre_att_pattern /= self.head_dim ** 0.5
 
-        if attention_mask:
+        if attention_mask is not None:
             pre_att_pattern += attention_mask
 
         att_pattern = t.softmax(pre_att_pattern, dim=-1)
 
-        res = t.einsum('b head s_q s, b head s d_head -> b head s_q d_head', att_pattern, V)
-        res = einops.rearrange(res, 'b head s d_head -> b s (head d_head)')
+        res = t.einsum('... h s t, ... h t d -> ... h s d', att_pattern, V)
+        res = einops.rearrange(res, '... head s dhead -> ... s (head dhead)')
         x = self.linear_o(res)
         if self.dropout_rate:
             return self.dropout_layer(x)
@@ -150,7 +149,7 @@ class TransformerDecoderBlock(nn.Module):
 
     def forward(self, x: t.Tensor) -> t.Tensor:
         # Building a decoder mask where all entries above the diagonal are negative infinity and all others are zero
-        seq_len = x.shape[-1]
+        seq_len = x.shape[-2]
         att_mask = t.where(t.arange(seq_len).unsqueeze(1) < t.arange(seq_len), -t.inf, 0)
 
         if self.parallel_layers:

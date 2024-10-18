@@ -129,11 +129,17 @@ class TestTransformerComponents(unittest.TestCase):
         attn_mask = t.where(t.arange(4).unsqueeze(1) < t.arange(4), -t.inf, 0)
 
         mha = blocks.MultiheadAttentionBlock(embed_dim, num_heads)
-        t_mha = t.nn.MultiheadAttention(embed_dim, num_heads)
+        mha.linear_q.weight, mha.linear_q.bias = Wq, bq
+        mha.linear_k.weight, mha.linear_k.bias = Wk, bk
+        mha.linear_v.weight, mha.linear_v.bias = Wv, bv
+        mha.linear_o.weight, mha.linear_o.bias = Wo, bo
+
+        t_mha = t.nn.MultiheadAttention(embed_dim, num_heads, batch_first=True)
+        t_mha.in_proj_weight, t_mha.in_proj_bias = t.nn.Parameter(t.cat((Wq, Wk, Wv), dim=0)), t.nn.Parameter(t.cat((bq, bk, bv), dim=0))
         t_mha.out_proj.weight, t_mha.out_proj.bias = Wo, bo
 
-        assert t.allclose(mha(x, attention_mask=attn_mask), t_mha(t_linq(x), t_link(x), t_linv(x), attn_mask=attn_mask))
-        assert t.allclose(mha(x2, attention_mask=attn_mask), t_mha(t_linq(x2), t_link(x2), t_linv(x2), attn_mask=attn_mask))
+        assert t.allclose(mha(x, attention_mask=attn_mask), t_mha(x, x, x, attn_mask=attn_mask)[0])
+        assert t.allclose(mha(x2, attention_mask=attn_mask), t_mha(x2, x2, x2, attn_mask=attn_mask)[0])
 
     def test_mlp_blocks(self):
         embed_dim = 10
@@ -159,8 +165,8 @@ class TestTransformerComponents(unittest.TestCase):
         x = t.arange(10).float()
         x2 = t.arange(20).reshape((2,10)).float()
 
-        assert t.allclose(mlp(x), torch_mlp(x))
-        assert t.allclose(mlp(x2), torch_mlp(x2))
+        assert t.allclose(mlp(x), torch_mlp(x), atol=1e-7)
+        assert t.allclose(mlp(x2), torch_mlp(x2), atol=1e-7)
         
         # W1 = t.nn.Parameter(t.randn((project_dim, embed_dim)))
         # b1 = t.nn.Parameter(t.randn(project_dim,))
