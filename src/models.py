@@ -17,7 +17,7 @@ class GPT2Embedding(t.nn.Module):
         x_tok = self.token_embedding_layer(x)
         return x_tok + x_pos
 
-class GPT2Model(t.nn.Module):
+class GPT2SmallModel(t.nn.Module):
     def __init__(self):
         super().__init__()
         self.num_tokens = 50257
