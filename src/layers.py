@@ -15,7 +15,7 @@ class LayerNorm(nn.Module):
     
     def forward(self, x: t.Tensor) -> t.Tensor:
         # Calcualte mean and variance over all dimensions but the first
-        agg_dims = tuple(range(1, len(x.shape)))
+        agg_dims = tuple(range(len(x.shape)-len(self.data_shape), len(x.shape)))
         x_mean = t.mean(x, dim=agg_dims, keepdim=True)
         x_var = t.var(x, dim=agg_dims, keepdim=True, correction=0)
 
@@ -37,7 +37,7 @@ class RMSNorm(nn.Module):
     
     def forward(self, x: t.Tensor) -> t.Tensor:
         # Calculate mean and variance over all dimensions but the first
-        agg_dims = tuple(range(1, len(x.shape)))
+        agg_dims = tuple(range(len(x.shape)-len(self.data_shape), len(x.shape)))
 
         x_ms = t.mean(x ** 2, dim=agg_dims, keepdim=True)
         normed_x = x/t.sqrt(x_ms+self.eps)
@@ -82,7 +82,7 @@ class Dropout(nn.Module):
     
     def forward(self, x: t.Tensor) -> t.Tensor:
         if self.training:
-            random_mask = t.random(x.shape) > self.dropout_rate
+            random_mask = t.rand(x.shape) > self.dropout_rate
             x *= random_mask
             x *= 1/(1-self.dropout_rate)
             return x
