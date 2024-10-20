@@ -164,6 +164,8 @@ class TransformerDecoderBlock(nn.Module):
                 return self.norm_layer1(x + self.mha_block(x, attention_mask=att_mask) + self.mlp_block(x))
         else:
             if self.use_pre_norm:
-                return x + self.mlp_block(self.norm_layer2(x + self.mha_block(self.norm_layer1(x), attention_mask=att_mask)))
+                x = x + self.mha_block(self.norm_layer1(x), attention_mask=att_mask)
+                return x + self.mlp_block(self.norm_layer2(x))
             else:
-                return self.norm_layer2(x + self.mlp_block(self.norm_layer1(x + self.mha_block(x, attention_mask=att_mask))))
+                x = self.norm_layer1(x + self.mha_block(x, attention_mask=att_mask))
+                return self.norm_layer2(x + self.mlp_block(x))
