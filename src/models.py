@@ -41,6 +41,6 @@ class GPT2SmallModel(t.nn.Module):
         x = self.final_ln(x)
 
         # Tied unembedding
-        x = t.einsum('th, ...h -> ...t', self.embedding_layer.token_embedding_layer, x)
+        x = t.einsum('th, ...h -> ...t', self.embedding_layer.token_embedding_layer.weight, x)
 
         return x
