@@ -23,10 +23,10 @@ class GPT2SmallModel(t.nn.Module):
         self.num_tokens = 50257
         self.hidden_size = 768
         self.num_layers = 12
+        self.num_heads = 12
         self.activation_function = 'gelu'
         self.context_length = 1024
         self.dropout_rate = 0.1
-        self.num_heads = 12
 
         self.init_dropout_layer = layers.Dropout(self.dropout_rate)
         self.embedding_layer = GPT2Embedding(self.num_tokens, self.hidden_size, self.context_length)
@@ -43,4 +43,28 @@ class GPT2SmallModel(t.nn.Module):
         # Tied unembedding
         x = t.einsum('th, ...h -> ...t', self.embedding_layer.token_embedding_layer.weight, x)
 
+        return x
+
+class Llama7BModel(t.nn.Module):
+    def __init__(self):
+        self.num_tokens = 32000
+        self.hidden_size = 4096
+        self.num_layers = 32
+        self.num_heads = 32
+        self.activation_function = 'swish'
+        self.context_length = 2048
+
+        self.embedding_layer = layers.Embedding(self.num_tokens, self.hidden_size)
+        # Need to add RoPE
+        self.transformer_blocks = t.nn.ModuleList([blocks.TransformerDecoderBlock(self.hidden_size, self.num_heads, 8*self.hidden_size//3, 'glublock', self.activation_function, 'rms_norm', use_pre_norm=True) for _ in range(self.num_layers)])
+        self.final_rn = layers.RMSNorm((self.hidden_size,))
+        self.unembedding_layer = layers.Linear(4096, 32000, includes_bias=False)
+        
+    def forward(self, x: t.Tensor) -> t.Tensor:
+        x = self.embedding_layer(x)
+        for block in self.transformer_blocks:
+            x = block(x)
+        
+        x = self.final_rn(x)
+        x = self.unembedding_layer(x)
         return x
