@@ -88,3 +88,25 @@ class Dropout(nn.Module):
             return x
         else:
             return x
+
+# Assumes
+class RotaryPositionEmbedding(nn.Module):
+    def __init__(self, embed_dim: int, base: int=10000):
+        assert embed_dim % 2 == 0
+        self.embed_dim = embed_dim
+        self.base = base
+
+    def forward(self, x: t.Tensor) -> t.Tensor:
+        # Assumes x has dimensions (..., s, d) where s is sequence and d is the embedding dimensions, other dimensions are treated
+        # as batch dimensions
+        # TODO: Include positional input for RoPE at inference
+        theta_vec = t.pow(10000, (-2 * t.arange(self.embed_dim) // 2) / self.embed_dim)
+
+        seq_len = x.shape[-2]
+        theta_prod = theta_vec * t.arange(seq_len).unsqueeze(dim=1)
+        alt_theta_prod = theta_prod * t.pow(-1, t.arange(1, self.embed_dim+1))
+
+        rot_vec_cos = t.cos(theta_prod)
+        rot_vec_sin = t.sin(alt_theta_prod)
+
+        return t.einsum('td,...d->...t', rot_vec_cos, x) + t.einsum('td,...d->...t', rot_vec_sin, x)
