@@ -76,7 +76,7 @@ class MixtureofExpertsBlock(nn.Module):
     pass
 
 class MultiheadAttentionBlock(nn.Module):
-    def __init__(self, embed_dim: int, num_heads: int, dropout_rate: Optional[float]=None):
+    def __init__(self, embed_dim: int, num_heads: int, dropout_rate: Optional[float]=None, rotary_embedding: bool=False, rotary_base: Optional[int]=None):
         super().__init__()
         self.embed_dim = embed_dim
         self.num_heads = num_heads
@@ -84,6 +84,15 @@ class MultiheadAttentionBlock(nn.Module):
         assert embed_dim % num_heads == 0
         # Assuming head_dim = embed_dim / num_heads
         self.head_dim = self.embed_dim//self.num_heads
+
+        self.rotary_embedding = rotary_embedding
+        self.rotary_base = rotary_base
+
+        if self.rotary_embedding:
+            if self.rotary_base is not None:
+                self.rotary_layer = layers.RotaryPositionEmbedding(self.head_dim, self.rotary_base)
+            else:
+                self.rotary_layer = layers.RotaryPositionEmbedding(self.head_dim)
 
         self.linear_q = layers.Linear(embed_dim, embed_dim)
         self.linear_k = layers.Linear(embed_dim, embed_dim)
@@ -100,6 +109,10 @@ class MultiheadAttentionBlock(nn.Module):
         Q = einops.rearrange(self.linear_q(x), '... s (head dhead) -> ... head s dhead', head=self.num_heads)
         K = einops.rearrange(self.linear_k(x), '... s (head dhead) -> ... head s dhead', head=self.num_heads)
         V = einops.rearrange(self.linear_v(x), '... s (head dhead) -> ... head s dhead', head=self.num_heads)
+    
+        if self.rotary_embedding:
+            Q = self.rotary_layer(Q)
+            K = self.rotary_layer(K)
 
         pre_att_pattern = t.einsum('... h s d, ... h t d -> ... h s t', Q, K)
         pre_att_pattern /= self.head_dim ** 0.5

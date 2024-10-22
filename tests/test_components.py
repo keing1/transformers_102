@@ -115,7 +115,6 @@ class TestTransformerComponents(unittest.TestCase):
         x = t.arange(768).float().reshape((2,8,3,16))
         t_x = einops.rearrange(x, 'b h s d -> b s h d')
 
-
         assert t.allclose(my_rpe(x), einops.rearrange(torch_rpe(t_x), 'b s h d -> b h s d'))
 
     def test_attention_block(self):
