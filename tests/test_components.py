@@ -1,8 +1,11 @@
 import unittest
 import torch as t
 import torch.nn.functional as F
+from torchtune import modules
+import einops
 import sys
 import os
+
 
 from src import activations, layers, blocks
 
@@ -100,6 +103,20 @@ class TestTransformerComponents(unittest.TestCase):
 
         assert t.allclose(lin(x), torch_lin(x), atol=1e-7)
         assert t.allclose(lin(x2), torch_lin(x2), atol=1e-7)
+    
+    def test_rope(self):
+        embed = 16
+        base = 1000
+
+        my_rpe = layers.RotaryPositionEmbedding(embed, base=base)
+        torch_rpe = modules.RotaryPositionalEmbeddings(embed, base=base)
+
+        # the torchtune rpe class assumes the sequence dimension is 2nd while my class assumes it is 3rd (specifically 2nd to last)
+        x = t.arange(768).float().reshape((2,8,3,16))
+        t_x = einops.rearrange(x, 'b h s d -> b s h d')
+
+
+        assert t.allclose(my_rpe(x), einops.rearrange(torch_rpe(t_x), 'b s h d -> b h s d'))
 
     def test_attention_block(self):
         embed_dim = 10

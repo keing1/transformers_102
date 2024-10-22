@@ -101,14 +101,14 @@ class RotaryPositionEmbedding(nn.Module):
     def forward(self, x: t.Tensor) -> t.Tensor:
         # Assumes x has dimensions (..., s, d) where s is sequence and d is the embedding dimensions, other dimensions are treated
         # as batch dimensions
-        # TODO: Include positional input for RoPE at inference
+        # TODO: Include positional input for RoPE at inference time
         assert x.shape[-1] == self.embed_dim
 
         # Applying sparse product from section 3.4.2: https://arxiv.org/pdf/2104.09864
         x_split = einops.rearrange(x, '... (g p) -> ... g p', p=2)
         flipped_x = einops.rearrange(t.flip(x_split.float() * t.tensor([1, -1]), dims=(-1,)), '... g p -> ... (g p)')
         
-        theta_vec = t.pow(10000, (-2 * (t.arange(self.embed_dim) // 2)) / self.embed_dim)
+        theta_vec = t.pow(self.base, (-2 * (t.arange(self.embed_dim) // 2)) / self.embed_dim)
         seq_len = x.shape[-2]
         theta_prod = theta_vec * t.arange(seq_len).unsqueeze(dim=1)
 
