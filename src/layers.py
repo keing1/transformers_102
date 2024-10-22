@@ -1,6 +1,7 @@
 import torch as t
 from torch import nn
 from typing import Tuple
+import einops
 
 class LayerNorm(nn.Module):
     def __init__(self, data_shape: Tuple[int, ...], eps: float=1e-5, includes_bias: bool=True):
@@ -92,6 +93,7 @@ class Dropout(nn.Module):
 # Assumes
 class RotaryPositionEmbedding(nn.Module):
     def __init__(self, embed_dim: int, base: int=10000):
+        super().__init__()
         assert embed_dim % 2 == 0
         self.embed_dim = embed_dim
         self.base = base
@@ -100,13 +102,17 @@ class RotaryPositionEmbedding(nn.Module):
         # Assumes x has dimensions (..., s, d) where s is sequence and d is the embedding dimensions, other dimensions are treated
         # as batch dimensions
         # TODO: Include positional input for RoPE at inference
-        theta_vec = t.pow(10000, (-2 * t.arange(self.embed_dim) // 2) / self.embed_dim)
+        assert x.shape[-1] == self.embed_dim
 
+        # Applying sparse product from section 3.4.2: https://arxiv.org/pdf/2104.09864
+        x_split = einops.rearrange(x, '... (g p) -> ... g p', p=2)
+        flipped_x = einops.rearrange(t.flip(x_split.float() * t.tensor([1, -1]), dims=(-1,)), '... g p -> ... (g p)')
+        
+        theta_vec = t.pow(10000, (-2 * (t.arange(self.embed_dim) // 2)) / self.embed_dim)
         seq_len = x.shape[-2]
         theta_prod = theta_vec * t.arange(seq_len).unsqueeze(dim=1)
-        alt_theta_prod = theta_prod * t.pow(-1, t.arange(1, self.embed_dim+1))
 
         rot_vec_cos = t.cos(theta_prod)
-        rot_vec_sin = t.sin(alt_theta_prod)
+        rot_vec_sin = t.sin(theta_prod)
 
-        return t.einsum('td,...d->...t', rot_vec_cos, x) + t.einsum('td,...d->...t', rot_vec_sin, x)
+        return rot_vec_cos * x + rot_vec_sin * flipped_x
