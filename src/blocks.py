@@ -76,7 +76,7 @@ class MixtureofExpertsBlock(nn.Module):
     pass
 
 class MultiheadAttentionBlock(nn.Module):
-    def __init__(self, embed_dim: int, num_heads: int, dropout_rate: Optional[float]=None, rotary_embedding: bool=False, rotary_base: Optional[int]=None):
+    def __init__(self, embed_dim: int, num_heads: int, dropout_rate: Optional[float]=None, rotary_embedding: bool=False, rotary_base: Optional[int]=None, attn_bias: bool=False):
         super().__init__()
         self.embed_dim = embed_dim
         self.num_heads = num_heads
@@ -94,10 +94,10 @@ class MultiheadAttentionBlock(nn.Module):
             else:
                 self.rotary_layer = layers.RotaryPositionEmbedding(self.head_dim)
 
-        self.linear_q = layers.Linear(embed_dim, embed_dim)
-        self.linear_k = layers.Linear(embed_dim, embed_dim)
-        self.linear_v = layers.Linear(embed_dim, embed_dim)
-        self.linear_o = layers.Linear(embed_dim, embed_dim)
+        self.linear_q = layers.Linear(embed_dim, embed_dim, includes_bias=attn_bias)
+        self.linear_k = layers.Linear(embed_dim, embed_dim, includes_bias=attn_bias)
+        self.linear_v = layers.Linear(embed_dim, embed_dim, includes_bias=attn_bias)
+        self.linear_o = layers.Linear(embed_dim, embed_dim, includes_bias=attn_bias)
 
         self.dropout_rate = dropout_rate
         # Optionally has dropout layers after the attention pattern softmax and at the end of the block like in GPT-2
@@ -133,7 +133,7 @@ class MultiheadAttentionBlock(nn.Module):
             return res
 
 class TransformerDecoderBlock(nn.Module):
-    def __init__(self, embed_dim: int, num_heads: int, project_dim: int, mlp_type:str, activation: str, norm_type: str, use_pre_norm: bool=True, parallel_layers: bool=False, dropout_rate: Optional[float]=None, rotary_embedding: bool=False, rotary_base: Optional[int]=None):
+    def __init__(self, embed_dim: int, num_heads: int, project_dim: int, mlp_type:str, activation: str, norm_type: str, use_pre_norm: bool=True, parallel_layers: bool=False, dropout_rate: Optional[float]=None, rotary_embedding: bool=False, rotary_base: Optional[int]=None, mha_attn_bias: bool=False):
         super().__init__()
         self.embed_dim = embed_dim
         self.num_heads = num_heads
@@ -157,7 +157,7 @@ class TransformerDecoderBlock(nn.Module):
         self.rotary_embedding = rotary_embedding
         self.rotary_base = rotary_base
 
-        self.mha_block = MultiheadAttentionBlock(embed_dim, num_heads, dropout_rate=self.dropout_rate, rotary_embedding=self.rotary_embedding, rotary_base=self.rotary_base)
+        self.mha_block = MultiheadAttentionBlock(embed_dim, num_heads, dropout_rate=self.dropout_rate, rotary_embedding=self.rotary_embedding, rotary_base=self.rotary_base, attn_bias=mha_attn_bias)
         if mlp_type == 'mlpblock':
             self.mlp_block = MLPBlock(embed_dim, project_dim, activation, dropout_rate=self.dropout_rate)
         elif mlp_type == 'glublock':

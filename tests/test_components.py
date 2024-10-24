@@ -144,7 +144,7 @@ class TestTransformerComponents(unittest.TestCase):
 
         attn_mask = t.where(t.arange(4).unsqueeze(1) < t.arange(4), -t.inf, 0)
 
-        mha = blocks.MultiheadAttentionBlock(embed_dim, num_heads)
+        mha = blocks.MultiheadAttentionBlock(embed_dim, num_heads, attn_bias=True)
         mha.linear_q.weight, mha.linear_q.bias = Wq, bq
         mha.linear_k.weight, mha.linear_k.bias = Wk, bk
         mha.linear_v.weight, mha.linear_v.bias = Wv, bv

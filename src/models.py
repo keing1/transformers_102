@@ -30,7 +30,7 @@ class GPT2SmallModel(t.nn.Module):
 
         self.init_dropout_layer = layers.Dropout(self.dropout_rate)
         self.embedding_layer = GPT2Embedding(self.num_tokens, self.hidden_size, self.context_length)
-        self.transformer_blocks = t.nn.ModuleList([blocks.TransformerDecoderBlock(self.hidden_size, self.num_heads, 4*self.hidden_size, 'mlpblock', self.activation_function, 'layer_norm', use_pre_norm=True, dropout_rate=self.dropout_rate) for _ in range(self.num_layers)])
+        self.transformer_blocks = t.nn.ModuleList([blocks.TransformerDecoderBlock(self.hidden_size, self.num_heads, 4*self.hidden_size, 'mlpblock', self.activation_function, 'layer_norm', use_pre_norm=True, dropout_rate=self.dropout_rate, mha_attn_bias=True) for _ in range(self.num_layers)])
         self.final_ln = layers.LayerNorm((self.hidden_size,))
     
     def forward(self, x: t.Tensor) -> t.Tensor:
