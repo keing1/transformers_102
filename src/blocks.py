@@ -56,17 +56,17 @@ class GLUBlock(nn.Module):
         else:
             raise NotImplementedError("Only relu, gelu, swish, and sigmoid activation functions are implemented.")
 
-        self.linear1 = layers.Linear(self.embed_dim, self.project_dim)
-        self.linear2 = layers.Linear(self.embed_dim, self.project_dim)
-        self.linear3 = layers.Linear(self.project_dim, self.embed_dim)
+        self.linear_gate = layers.Linear(self.embed_dim, self.project_dim)
+        self.linear_up = layers.Linear(self.embed_dim, self.project_dim)
+        self.linear_down = layers.Linear(self.project_dim, self.embed_dim)
 
         self.dropout_rate = dropout_rate
         if self.dropout_rate:
             self.dropout_layer = layers.Dropout(self.dropout_rate)
 
     def forward(self, x: t.Tensor) -> t.Tensor:
-        x = self.activation(self.linear1(x)) * self.linear2(x)
-        x = self.linear3(x)
+        x = self.activation(self.linear_gate(x)) * self.linear_up(x)
+        x = self.linear_down(x)
         if self.dropout_rate:
             return self.dropout_layer(x)
         else:
@@ -133,7 +133,7 @@ class MultiheadAttentionBlock(nn.Module):
             return res
 
 class TransformerDecoderBlock(nn.Module):
-    def __init__(self, embed_dim: int, num_heads: int, project_dim: int, mlp_type:str, activation: str, norm_type: str, use_pre_norm: bool=True, parallel_layers: bool=False, dropout_rate: Optional[float]=None):
+    def __init__(self, embed_dim: int, num_heads: int, project_dim: int, mlp_type:str, activation: str, norm_type: str, use_pre_norm: bool=True, parallel_layers: bool=False, dropout_rate: Optional[float]=None, rotary_embedding: bool=False, rotary_base: Optional[int]=None):
         super().__init__()
         self.embed_dim = embed_dim
         self.num_heads = num_heads
@@ -154,7 +154,10 @@ class TransformerDecoderBlock(nn.Module):
 
         self.dropout_rate = dropout_rate
 
-        self.mha_block = MultiheadAttentionBlock(embed_dim, num_heads, dropout_rate=self.dropout_rate)
+        self.rotary_embedding = rotary_embedding
+        self.rotary_base = rotary_base
+
+        self.mha_block = MultiheadAttentionBlock(embed_dim, num_heads, dropout_rate=self.dropout_rate, rotary_embedding=self.rotary_embedding, rotary_base=self.rotary_base)
         if mlp_type == 'mlpblock':
             self.mlp_block = MLPBlock(embed_dim, project_dim, activation, dropout_rate=self.dropout_rate)
         elif mlp_type == 'glublock':
