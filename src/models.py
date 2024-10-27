@@ -50,13 +50,14 @@ class Llama7BModel(t.nn.Module):
         super().__init__()
         self.num_tokens = 32000
         self.hidden_size = 4096
+        self.up_proj = 11008
         self.num_layers = 32
         self.num_heads = 32
         self.activation_function = 'swish'
         self.context_length = 2048
 
         self.embedding_layer = layers.Embedding(self.num_tokens, self.hidden_size)
-        self.transformer_blocks = t.nn.ModuleList([blocks.TransformerDecoderBlock(self.hidden_size, self.num_heads, 8*self.hidden_size//3, 'glublock', self.activation_function, 'rms_norm', use_pre_norm=True, rotary_embedding=True) for _ in range(self.num_layers)])
+        self.transformer_blocks = t.nn.ModuleList([blocks.TransformerDecoderBlock(self.hidden_size, self.num_heads, self.up_proj, 'glublock', self.activation_function, 'rms_norm', use_pre_norm=True, rotary_embedding=True, rope_alternate=True, mlp_bias=False) for _ in range(self.num_layers)])
         self.final_rn = layers.RMSNorm((self.hidden_size,))
         self.unembedding_layer = layers.Linear(4096, 32000, includes_bias=False)
         

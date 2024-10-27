@@ -90,7 +90,6 @@ class Dropout(nn.Module):
         else:
             return x
 
-# Assumes
 class RotaryPositionEmbedding(nn.Module):
     def __init__(self, embed_dim: int, base: int=10000):
         super().__init__()
@@ -98,11 +97,15 @@ class RotaryPositionEmbedding(nn.Module):
         self.embed_dim = embed_dim
         self.base = base
 
-    def forward(self, x: t.Tensor) -> t.Tensor:
+    def forward(self, x: t.Tensor, rope_alternate: bool=False) -> t.Tensor:
         # Assumes x has dimensions (..., s, d) where s is sequence and d is the embedding dimensions, other dimensions are treated
         # as batch dimensions
         # TODO: Include positional input for RoPE at inference time
         assert x.shape[-1] == self.embed_dim
+
+        # Llama uses an alternate version of RoPE that rotates different 2D subspaces: https://discuss.huggingface.co/t/is-llama-rotary-embedding-implementation-correct/44509/3
+        if rope_alternate:
+            x = einops.rearrange(x, '... (c d) -> ... (d c)', c=2)
 
         # Applying sparse product from section 3.4.2: https://arxiv.org/pdf/2104.09864
         x_split = einops.rearrange(x, '... (g p) -> ... g p', p=2)
@@ -115,4 +118,9 @@ class RotaryPositionEmbedding(nn.Module):
         rot_vec_cos = t.cos(theta_prod)
         rot_vec_sin = t.sin(theta_prod)
 
-        return rot_vec_cos * x + rot_vec_sin * flipped_x
+        out = rot_vec_cos * x + rot_vec_sin * flipped_x
+
+        if rope_alternate:
+            out = einops.rearrange(out, '... (d c) -> ... (c d)', c=2)
+        
+        return out

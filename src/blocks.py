@@ -8,7 +8,7 @@ from src import activations, layers
 # TODO: Add MoE, allow for GQA/MQA, add RoPE and kv-caching
 
 class MLPBlock(nn.Module):
-    def __init__(self, embed_dim: int, project_dim: int, activation: str, dropout_rate: Optional[float]=None):
+    def __init__(self, embed_dim: int, project_dim: int, activation: str, dropout_rate: Optional[float]=None, includes_bias: bool=True):
         super().__init__()
         self.embed_dim = embed_dim
         self.project_dim = project_dim
@@ -24,8 +24,8 @@ class MLPBlock(nn.Module):
         else:
             raise NotImplementedError("Only relu, gelu, swish, and sigmoid activation functions are implemented.")
 
-        self.linear1 = layers.Linear(self.embed_dim, self.project_dim)
-        self.linear2 = layers.Linear(self.project_dim, self.embed_dim)
+        self.linear1 = layers.Linear(self.embed_dim, self.project_dim, includes_bias=includes_bias)
+        self.linear2 = layers.Linear(self.project_dim, self.embed_dim, includes_bias=includes_bias)
 
         self.dropout_rate = dropout_rate
         if self.dropout_rate:
@@ -40,7 +40,7 @@ class MLPBlock(nn.Module):
 
 
 class GLUBlock(nn.Module):
-    def __init__(self, embed_dim: int, project_dim: int, activation: str, dropout_rate: Optional[float]=None):
+    def __init__(self, embed_dim: int, project_dim: int, activation: str, dropout_rate: Optional[float]=None, includes_bias: bool=True):
         super().__init__()
         self.embed_dim = embed_dim
         self.project_dim = project_dim
@@ -56,9 +56,9 @@ class GLUBlock(nn.Module):
         else:
             raise NotImplementedError("Only relu, gelu, swish, and sigmoid activation functions are implemented.")
 
-        self.linear_gate = layers.Linear(self.embed_dim, self.project_dim)
-        self.linear_up = layers.Linear(self.embed_dim, self.project_dim)
-        self.linear_down = layers.Linear(self.project_dim, self.embed_dim)
+        self.linear_gate = layers.Linear(self.embed_dim, self.project_dim, includes_bias=includes_bias)
+        self.linear_up = layers.Linear(self.embed_dim, self.project_dim, includes_bias=includes_bias)
+        self.linear_down = layers.Linear(self.project_dim, self.embed_dim, includes_bias=includes_bias)
 
         self.dropout_rate = dropout_rate
         if self.dropout_rate:
@@ -76,7 +76,7 @@ class MixtureofExpertsBlock(nn.Module):
     pass
 
 class MultiheadAttentionBlock(nn.Module):
-    def __init__(self, embed_dim: int, num_heads: int, dropout_rate: Optional[float]=None, rotary_embedding: bool=False, rotary_base: Optional[int]=None, attn_bias: bool=False):
+    def __init__(self, embed_dim: int, num_heads: int, dropout_rate: Optional[float]=None, rotary_embedding: bool=False, rotary_base: Optional[int]=None, rope_alternate: bool=False, includes_bias: bool=False):
         super().__init__()
         self.embed_dim = embed_dim
         self.num_heads = num_heads
@@ -87,6 +87,7 @@ class MultiheadAttentionBlock(nn.Module):
 
         self.rotary_embedding = rotary_embedding
         self.rotary_base = rotary_base
+        self.rope_alternate = rope_alternate
 
         if self.rotary_embedding:
             if self.rotary_base is not None:
@@ -94,10 +95,10 @@ class MultiheadAttentionBlock(nn.Module):
             else:
                 self.rotary_layer = layers.RotaryPositionEmbedding(self.head_dim)
 
-        self.linear_q = layers.Linear(embed_dim, embed_dim, includes_bias=attn_bias)
-        self.linear_k = layers.Linear(embed_dim, embed_dim, includes_bias=attn_bias)
-        self.linear_v = layers.Linear(embed_dim, embed_dim, includes_bias=attn_bias)
-        self.linear_o = layers.Linear(embed_dim, embed_dim, includes_bias=attn_bias)
+        self.linear_q = layers.Linear(embed_dim, embed_dim, includes_bias=includes_bias)
+        self.linear_k = layers.Linear(embed_dim, embed_dim, includes_bias=includes_bias)
+        self.linear_v = layers.Linear(embed_dim, embed_dim, includes_bias=includes_bias)
+        self.linear_o = layers.Linear(embed_dim, embed_dim, includes_bias=includes_bias)
 
         self.dropout_rate = dropout_rate
         # Optionally has dropout layers after the attention pattern softmax and at the end of the block like in GPT-2
@@ -111,8 +112,8 @@ class MultiheadAttentionBlock(nn.Module):
         V = einops.rearrange(self.linear_v(x), '... s (head dhead) -> ... head s dhead', head=self.num_heads)
     
         if self.rotary_embedding:
-            Q = self.rotary_layer(Q)
-            K = self.rotary_layer(K)
+            Q = self.rotary_layer(Q, rope_alternate=True)
+            K = self.rotary_layer(K, rope_alternate=True)
 
         pre_att_pattern = t.einsum('... h s d, ... h t d -> ... h s t', Q, K)
         pre_att_pattern /= self.head_dim ** 0.5
@@ -133,7 +134,7 @@ class MultiheadAttentionBlock(nn.Module):
             return res
 
 class TransformerDecoderBlock(nn.Module):
-    def __init__(self, embed_dim: int, num_heads: int, project_dim: int, mlp_type:str, activation: str, norm_type: str, use_pre_norm: bool=True, parallel_layers: bool=False, dropout_rate: Optional[float]=None, rotary_embedding: bool=False, rotary_base: Optional[int]=None, mha_attn_bias: bool=False):
+    def __init__(self, embed_dim: int, num_heads: int, project_dim: int, mlp_type:str, activation: str, norm_type: str, use_pre_norm: bool=True, parallel_layers: bool=False, dropout_rate: Optional[float]=None, rotary_embedding: bool=False, rotary_base: Optional[int]=None, rope_alternate: bool=False, mha_bias: bool=False, mlp_bias: bool=True):
         super().__init__()
         self.embed_dim = embed_dim
         self.num_heads = num_heads
@@ -156,12 +157,16 @@ class TransformerDecoderBlock(nn.Module):
 
         self.rotary_embedding = rotary_embedding
         self.rotary_base = rotary_base
+        self.rope_alternate = rope_alternate
 
-        self.mha_block = MultiheadAttentionBlock(embed_dim, num_heads, dropout_rate=self.dropout_rate, rotary_embedding=self.rotary_embedding, rotary_base=self.rotary_base, attn_bias=mha_attn_bias)
+        self.mha_bias = mha_bias
+        self.mlp_bias = mlp_bias
+
+        self.mha_block = MultiheadAttentionBlock(embed_dim, num_heads, dropout_rate=self.dropout_rate, rotary_embedding=self.rotary_embedding, rotary_base=self.rotary_base, rope_alternate=self.rope_alternate, includes_bias=self.mha_bias)
         if mlp_type == 'mlpblock':
-            self.mlp_block = MLPBlock(embed_dim, project_dim, activation, dropout_rate=self.dropout_rate)
+            self.mlp_block = MLPBlock(embed_dim, project_dim, activation, dropout_rate=self.dropout_rate, includes_bias=self.mlp_bias)
         elif mlp_type == 'glublock':
-            self.mlp_block = GLUBlock(embed_dim, project_dim, activation, dropout_rate=self.dropout_rate)
+            self.mlp_block = GLUBlock(embed_dim, project_dim, activation, dropout_rate=self.dropout_rate, includes_bias=self.mlp_bias)
         else:
             raise NotImplementedError("MLP types other than mlpblock and glublock have not been implemented.")
 
