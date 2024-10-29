@@ -76,7 +76,7 @@ class MixtureofExpertsBlock(nn.Module):
     pass
 
 class MultiheadAttentionBlock(nn.Module):
-    def __init__(self, embed_dim: int, num_heads: int, dropout_rate: Optional[float]=None, rotary_embedding: bool=False, rotary_base: Optional[int]=None, rope_alternate: bool=False, includes_bias: bool=False):
+    def __init__(self, embed_dim: int, num_heads: int, rotary_embedding: bool=False, rotary_base: Optional[int]=None, rope_alternate: bool=False, includes_bias: bool=False,  dropout_rate: Optional[float]=None):
         super().__init__()
         self.embed_dim = embed_dim
         self.num_heads = num_heads
@@ -112,8 +112,8 @@ class MultiheadAttentionBlock(nn.Module):
         V = einops.rearrange(self.linear_v(x), '... s (head dhead) -> ... head s dhead', head=self.num_heads)
     
         if self.rotary_embedding:
-            Q = self.rotary_layer(Q, rope_alternate=True)
-            K = self.rotary_layer(K, rope_alternate=True)
+            Q = self.rotary_layer(Q, rope_alternate=self.rope_alternate)
+            K = self.rotary_layer(K, rope_alternate=self.rope_alternate)
 
         pre_att_pattern = t.einsum('... h s d, ... h t d -> ... h s t', Q, K)
         pre_att_pattern /= self.head_dim ** 0.5
