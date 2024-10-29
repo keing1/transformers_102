@@ -186,7 +186,7 @@ class GQABlock(nn.Module):
 
 
 class TransformerDecoderBlock(nn.Module):
-    def __init__(self, embed_dim: int, num_heads: int, project_dim: int, mlp_type:str, activation: str, norm_type: str, use_pre_norm: bool=True, parallel_layers: bool=False, dropout_rate: Optional[float]=None, rotary_embedding: bool=False, rotary_base: Optional[int]=None, rope_alternate: bool=False, mha_bias: bool=False, mlp_bias: bool=True):
+    def __init__(self, embed_dim: int, num_heads: int, project_dim: int, activation: str, norm_type: str, num_heads_kv: Optional[int]=None, mlp_type: str='mlpblock', mha_type: str='mhablock', use_pre_norm: bool=True, parallel_layers: bool=False, dropout_rate: Optional[float]=None, rotary_embedding: bool=False, rotary_base: Optional[int]=None, rope_alternate: bool=False, mha_bias: bool=False, mlp_bias: bool=True):
         super().__init__()
         self.embed_dim = embed_dim
         self.num_heads = num_heads
@@ -214,7 +214,13 @@ class TransformerDecoderBlock(nn.Module):
         self.mha_bias = mha_bias
         self.mlp_bias = mlp_bias
 
-        self.mha_block = MultiheadAttentionBlock(embed_dim, num_heads, dropout_rate=self.dropout_rate, rotary_embedding=self.rotary_embedding, rotary_base=self.rotary_base, rope_alternate=self.rope_alternate, includes_bias=self.mha_bias)
+        if mha_type == 'mhablock':
+            self.mha_block = MultiheadAttentionBlock(embed_dim, num_heads, dropout_rate=self.dropout_rate, rotary_embedding=self.rotary_embedding, rotary_base=self.rotary_base, rope_alternate=self.rope_alternate, includes_bias=self.mha_bias)
+        elif mha_type == 'gqablock':
+            self.mha_lock = GQABlock(embed_dim, num_heads, num_heads_kv, rotary_embedding=self.rotary_embedding, rotary_base=self.rotary_base)
+        else:
+            raise NotImplementedError("Attention types other than mhablock and gqablock have not been implemented.")
+
         if mlp_type == 'mlpblock':
             self.mlp_block = MLPBlock(embed_dim, project_dim, activation, dropout_rate=self.dropout_rate, includes_bias=self.mlp_bias)
         elif mlp_type == 'glublock':
