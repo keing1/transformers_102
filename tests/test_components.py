@@ -1,5 +1,6 @@
 import unittest
 import torch as t
+import torch.nn as nn
 import torch.nn.functional as F
 from torchtune import modules
 import einops
@@ -198,6 +199,23 @@ class TestTransformerComponents(unittest.TestCase):
         
         # TODO: Add GLU and MoE test
         pass
+
+    def test_gqa_block(self):
+        embed_dim = 36
+        heads_q = 6
+        heads_kv = 2
+
+        mha = blocks.MultiheadAttentionBlock(embed_dim, heads_q, rotary_embedding=True)
+        gqa = blocks.GQABlock(embed_dim, heads_q, heads_kv, rotary_embedding=True)
+
+        mha.linear_q.weight = nn.Parameter(gqa.linear_q.weight)
+        mha.linear_k.weight = nn.Parameter(einops.repeat(gqa.linear_k.weight, 'g e -> (repeat g) e', repeat=3))
+        mha.linear_v.weight = nn.Parameter(einops.repeat(gqa.linear_v.weight, 'g e -> (repeat g) e', repeat=3))
+        mha.linear_o.weight = nn.Parameter(gqa.linear_o.weight)
+
+        x = t.randn((1,3,36))
+
+        assert t.allclose(gqa(x), mha(x))
 
     def test_transformer_block(self):
         pass

@@ -76,7 +76,7 @@ class MixtureofExpertsBlock(nn.Module):
     pass
 
 class MultiheadAttentionBlock(nn.Module):
-    def __init__(self, embed_dim: int, num_heads: int, rotary_embedding: bool=False, rotary_base: Optional[int]=None, rope_alternate: bool=False, includes_bias: bool=False,  dropout_rate: Optional[float]=None):
+    def __init__(self, embed_dim: int, num_heads: int, rotary_embedding: bool=False, rotary_base: Optional[int]=None, rope_alternate: bool=False, includes_bias: bool=False, dropout_rate: Optional[float]=None):
         super().__init__()
         self.embed_dim = embed_dim
         self.num_heads = num_heads
@@ -132,6 +132,58 @@ class MultiheadAttentionBlock(nn.Module):
             return self.dropout_layer_2(res)
         else:
             return res
+
+class GQABlock(nn.Module):
+    def __init__(self, embed_dim: int, num_heads_q: int, num_heads_kv: int, rotary_embedding: bool=False, rotary_base: Optional[int]=None):
+        super().__init__()
+        self.embed_dim = embed_dim
+        self.num_heads_q = num_heads_q
+
+        assert embed_dim % num_heads_q == 0
+        # Assuming head_dim = embed_dim / num_heads
+        self.head_dim = self.embed_dim // self.num_heads_q
+
+        self.num_heads_kv = num_heads_kv
+        assert num_heads_q % num_heads_kv == 0
+        self.head_ratio = num_heads_q // num_heads_kv
+
+        self.rotary_embedding = rotary_embedding
+        self.rotary_base = rotary_base
+
+        if self.rotary_embedding:
+            if self.rotary_base is not None:
+                self.rotary_layer = layers.RotaryPositionEmbedding(self.head_dim, self.rotary_base)
+            else:
+                self.rotary_layer = layers.RotaryPositionEmbedding(self.head_dim)
+
+        self.linear_q = layers.Linear(embed_dim, embed_dim, includes_bias=False)
+        self.linear_k = layers.Linear(embed_dim, num_heads_kv*self.head_dim, includes_bias=False)
+        self.linear_v = layers.Linear(embed_dim, num_heads_kv*self.head_dim, includes_bias=False)
+        self.linear_o = layers.Linear(embed_dim, embed_dim, includes_bias=False)
+
+    def forward(self, x: t.Tensor, attention_mask: Optional[t.Tensor]=None) -> t.Tensor:
+        Q = einops.rearrange(self.linear_q(x), '... s (head dhead) -> ... head s dhead', head=self.num_heads_q)
+        K = einops.rearrange(self.linear_k(x), '... s (head dhead) -> ... head s dhead', head=self.num_heads_kv)
+        V = einops.rearrange(self.linear_v(x), '... s (head dhead) -> ... head s dhead', head=self.num_heads_kv)
+    
+        if self.rotary_embedding:
+            Q = self.rotary_layer(Q)
+            K = self.rotary_layer(K)
+
+        Q = einops.rearrange(Q, '... (head group) s dhead -> ... head group s dhead', group=self.num_heads_kv)
+
+        pre_att_pattern = t.einsum('... h g s d, ... g t d -> ... h g s t', Q, K)
+        pre_att_pattern /= self.head_dim ** 0.5
+
+        if attention_mask is not None:
+            pre_att_pattern += attention_mask
+
+        att_pattern = t.softmax(pre_att_pattern, dim=-1)
+
+        res = t.einsum('... h g s t, ... g t d -> ... h g s d', att_pattern, V)
+        res = einops.rearrange(res, '... head group s dhead -> ... s (head group dhead)')
+        return self.linear_o(res)
+
 
 class TransformerDecoderBlock(nn.Module):
     def __init__(self, embed_dim: int, num_heads: int, project_dim: int, mlp_type:str, activation: str, norm_type: str, use_pre_norm: bool=True, parallel_layers: bool=False, dropout_rate: Optional[float]=None, rotary_embedding: bool=False, rotary_base: Optional[int]=None, rope_alternate: bool=False, mha_bias: bool=False, mlp_bias: bool=True):
