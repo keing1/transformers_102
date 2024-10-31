@@ -5,7 +5,7 @@ from typing import Optional
 
 from src import activations, layers
 
-# TODO: Add MoE, allow for GQA/MQA, add RoPE and kv-caching
+# TODO: Add MoE, allow for more efficient inference (kv-caching and rope position)
 
 class MLPBlock(nn.Module):
     def __init__(self, embed_dim: int, project_dim: int, activation: str, dropout_rate: Optional[float]=None, includes_bias: bool=True):
@@ -73,7 +73,31 @@ class GLUBlock(nn.Module):
             return x
 
 class MixtureofExpertsBlock(nn.Module):
-    pass
+    def __init__(self, num_experts: int, num_experts_used: int, embed_dim: int, project_dim: int, activation: str, expert_type: str='mlpblock', dropout_rate: Optional[float]=None, includes_bias: bool=True):
+        super().__init__()
+        self.embed_dim = embed_dim
+        self.project_dim = project_dim
+
+        if expert_type == 'mlpblock':
+            subblock = MLPBlock
+        elif expert_type == 'glublock':
+            subblock = GLUBlock
+        else:
+            raise NotImplementedError("MLP types other than mlpblock and glublock have not been implemented.")
+        
+        self.experts = nn.ModuleList([subblock(embed_dim, project_dim, activation, dropout_rate, includes_bias) for _ in range(num_experts)])
+        self.router = layers.Linear(embed_dim, num_experts)
+        self.num_experts_used = num_experts_used
+
+    def forward(self, x: t.Tensor) -> t.Tensor:
+        expert_scores = self.router(x)
+        top_values, top_indices = t.topk(expert_scores, self.num_experts_used, -1)
+
+        router_weights = t.softmax(t.scatter(t.full(expert_scores.shape, -t.inf), -1, top_indices, top_values), dim=-1)
+
+
+
+        pass
 
 class MultiheadAttentionBlock(nn.Module):
     def __init__(self, embed_dim: int, num_heads: int, rotary_embedding: bool=False, rotary_base: Optional[int]=None, rope_alternate: bool=False, includes_bias: bool=False, dropout_rate: Optional[float]=None):
