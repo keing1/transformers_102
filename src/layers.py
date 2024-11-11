@@ -22,10 +22,9 @@ class LayerNorm(nn.Module):
 
         normed_x = (x - x_mean)/(t.sqrt(x_var+self.eps))
 
+        out_x = normed_x * self.weight
         if self.includes_bias:
-            out_x = normed_x * self.weight + self.bias
-        else:
-            out_x = normed_x * self.weight
+            out_x += self.bias
         return out_x
 
 class RMSNorm(nn.Module):
