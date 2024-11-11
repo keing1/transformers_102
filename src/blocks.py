@@ -5,7 +5,20 @@ from typing import Optional
 
 from src import activations, layers
 
-# TODO: Add MoE, allow for more efficient inference (kv-caching and rope position)
+# TODO: Allow for more efficient inference (kv-caching and rope position)
+
+def retrieve_activation_function(activation: str):
+    name_function_mapping = {
+        'relu': activations.relu,
+        'gelu': activations.gelu,
+        'swish': activations.swish,
+        'sigmoid': activations.sigmoid
+    }
+    try:
+        act_fun = name_function_mapping[activation]
+        return act_fun
+    except KeyError:
+        raise NotImplementedError("Only relu, gelu, swish, and sigmoid activation functions are implemented.")
 
 class MLPBlock(nn.Module):
     def __init__(self, embed_dim: int, project_dim: int, activation: str, dropout_rate: Optional[float]=None, includes_bias: bool=True):
@@ -13,16 +26,7 @@ class MLPBlock(nn.Module):
         self.embed_dim = embed_dim
         self.project_dim = project_dim
 
-        if activation == 'relu':
-            self.activation = activations.relu
-        elif activation == 'gelu':
-            self.activation = activations.gelu
-        elif activation == 'swish':
-            self.activation = activations.swish
-        elif activation == 'sigmoid':
-            self.activation = activations.sigmoid
-        else:
-            raise NotImplementedError("Only relu, gelu, swish, and sigmoid activation functions are implemented.")
+        self.activation = retrieve_activation_function(activation)
 
         self.linear1 = layers.Linear(self.embed_dim, self.project_dim, includes_bias=includes_bias)
         self.linear2 = layers.Linear(self.project_dim, self.embed_dim, includes_bias=includes_bias)
@@ -45,16 +49,7 @@ class GLUBlock(nn.Module):
         self.embed_dim = embed_dim
         self.project_dim = project_dim
 
-        if activation == 'relu':
-            self.activation = activations.relu
-        elif activation == 'gelu':
-            self.activation = activations.gelu
-        elif activation == 'swish':
-            self.activation = activations.swish
-        elif activation == 'sigmoid':
-            self.activation = activations.sigmoid
-        else:
-            raise NotImplementedError("Only relu, gelu, swish, and sigmoid activation functions are implemented.")
+        self.activation = retrieve_activation_function(activation)
 
         self.linear_gate = layers.Linear(self.embed_dim, self.project_dim, includes_bias=includes_bias)
         self.linear_up = layers.Linear(self.embed_dim, self.project_dim, includes_bias=includes_bias)
@@ -73,31 +68,45 @@ class GLUBlock(nn.Module):
             return x
 
 class MixtureofExpertsBlock(nn.Module):
-    def __init__(self, num_experts: int, num_experts_used: int, embed_dim: int, project_dim: int, activation: str, expert_type: str='mlpblock', dropout_rate: Optional[float]=None, includes_bias: bool=True):
+    def __init__(self, num_experts: int, num_experts_used: int, embed_dim: int, project_dim: int, activation: str):
         super().__init__()
         self.embed_dim = embed_dim
         self.project_dim = project_dim
 
-        if expert_type == 'mlpblock':
-            subblock = MLPBlock
-        elif expert_type == 'glublock':
-            subblock = GLUBlock
-        else:
-            raise NotImplementedError("MLP types other than mlpblock and glublock have not been implemented.")
+        self.activation = retrieve_activation_function(activation)
         
-        self.experts = nn.ModuleList([subblock(embed_dim, project_dim, activation, dropout_rate, includes_bias) for _ in range(num_experts)])
+        # Not supporting glu-based experts
+        self.experts_up = t.randn((num_experts, project_dim, embed_dim))
+        self.experts_down = t.randn((num_experts, embed_dim, project_dim))
+        
         self.router = layers.Linear(embed_dim, num_experts)
         self.num_experts_used = num_experts_used
 
     def forward(self, x: t.Tensor) -> t.Tensor:
-        expert_scores = self.router(x)
-        top_values, top_indices = t.topk(expert_scores, self.num_experts_used, -1)
+        s = x.shape[-2]
+        k = self.num_experts_used
 
-        router_weights = t.softmax(t.scatter(t.full(expert_scores.shape, -t.inf), -1, top_indices, top_values), dim=-1)
+        router_logits = self.router(x)
+        router_logits, indices = t.topk(router_logits, k)
+        router_weights = t.softmax(router_logits, dim=0)
 
+        experts_up_sparse = self.experts_up[indices.reshape(-1)]
+        experts_up_sparse = einops.rearrange(experts_up_sparse, '(b s k) u d -> b s k u d', s=s, k=k)
 
+        experts_down_sparse = self.experts_down[indices.reshape(-1)]
+        experts_down_sparse = einops.rearrange(experts_down_sparse, '(b s k) u d -> b s k u d', s=s, k=k)
 
-        pass
+        print(x.shape)
+        x = t.einsum('bskud,bsd->bsku', experts_up_sparse,x)
+        print(x.shape)
+        x = self.activation(x)
+        print(x.shape)
+        x = t.einsum('bskdu,bsku->bskd', experts_down_sparse, x)
+        print(x.shape)
+        x = t.einsum('bskd,bsk->bsd', x, router_weights)
+        print(x.shape)
+
+        return x
 
 class MultiheadAttentionBlock(nn.Module):
     def __init__(self, embed_dim: int, num_heads: int, rotary_embedding: bool=False, rotary_base: Optional[int]=None, rope_alternate: bool=False, includes_bias: bool=False, dropout_rate: Optional[float]=None):
