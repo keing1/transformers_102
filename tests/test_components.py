@@ -199,10 +199,10 @@ class TestTransformerComponents(unittest.TestCase):
         mlp = blocks.MLPBlock(embed_dim, project_dim, activation)
         moe = blocks.MixtureofExpertsBlock(num_experts, num_experts_used, embed_dim, project_dim, activation)
 
-        moe.expert_weights_up = einops.repeat(mlp.linear1.weight, '... -> repeat ...', repeat=num_experts)
-        moe.expert_weights_down = einops.repeat(mlp.linear2.weight, '... -> repeat ...', repeat=num_experts)
-        moe.expert_biases_up = einops.repeat(mlp.linear1.bias, '... -> repeat ...', repeat=num_experts)
-        moe.expert_biases_down = einops.repeat(mlp.linear2.bias, '... -> repeat ...', repeat=num_experts)
+        moe.expert_weights_up = nn.Parameter(einops.repeat(mlp.linear1.weight, '... -> repeat ...', repeat=num_experts))
+        moe.expert_weights_down = nn.Parameter(einops.repeat(mlp.linear2.weight, '... -> repeat ...', repeat=num_experts))
+        moe.expert_biases_up = nn.Parameter(einops.repeat(mlp.linear1.bias, '... -> repeat ...', repeat=num_experts))
+        moe.expert_biases_down = nn.Parameter(einops.repeat(mlp.linear2.bias, '... -> repeat ...', repeat=num_experts))
 
         x = t.randn((batch_size,seq_len,embed_dim))
 
@@ -216,10 +216,10 @@ class TestTransformerComponents(unittest.TestCase):
         mlps = [blocks.MLPBlock(embed_dim, project_dim, activation) for _ in range(num_experts)]
         moe = blocks.MixtureofExpertsBlock(num_experts, num_experts_used, embed_dim, project_dim, activation)
 
-        moe.expert_weights_up = t.stack([mlps[i].linear1.weight for i in range(num_experts)])
-        moe.expert_weights_down = t.stack([mlps[i].linear2.weight for i in range(num_experts)])
-        moe.expert_biases_up = t.stack([mlps[i].linear1.bias for i in range(num_experts)])
-        moe.expert_biases_down = t.stack([mlps[i].linear2.bias for i in range(num_experts)])
+        moe.expert_weights_up = nn.Parameter(t.stack([mlps[i].linear1.weight for i in range(num_experts)]))
+        moe.expert_weights_down = nn.Parameter(t.stack([mlps[i].linear2.weight for i in range(num_experts)]))
+        moe.expert_biases_up = nn.Parameter(t.stack([mlps[i].linear1.bias for i in range(num_experts)]))
+        moe.expert_biases_down = nn.Parameter(t.stack([mlps[i].linear2.bias for i in range(num_experts)]))
 
         router_layer = moe.router
 
