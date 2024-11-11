@@ -76,14 +76,14 @@ class MixtureofExpertsBlock(nn.Module):
         self.activation = retrieve_activation_function(activation)
         
         # Not supporting glu-based experts
-        self.expert_weights_up = t.randn((num_experts, project_dim, embed_dim))
-        self.expert_weights_down = t.randn((num_experts, embed_dim, project_dim))
+        self.expert_weights_up = nn.Parameter(t.randn((num_experts, project_dim, embed_dim)))
+        self.expert_weights_down = nn.Parameter(t.randn((num_experts, embed_dim, project_dim)))
 
         self.includes_bias = includes_bias
 
         if self.includes_bias:
-            self.expert_biases_up = t.randn((num_experts, project_dim))
-            self.expert_biases_down = t.randn((num_experts, embed_dim))
+            self.expert_biases_up = nn.Parameter(t.randn((num_experts, project_dim)))
+            self.expert_biases_down = nn.Parameter(t.randn((num_experts, embed_dim)))
         
         self.router = layers.Linear(embed_dim, num_experts, includes_bias=False)
         self.num_experts_used = num_experts_used
