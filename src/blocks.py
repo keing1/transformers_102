@@ -68,7 +68,7 @@ class GLUBlock(nn.Module):
             return x
 
 class MixtureofExpertsBlock(nn.Module):
-    def __init__(self, num_experts: int, num_experts_used: int, embed_dim: int, project_dim: int, activation: str):
+    def __init__(self, num_experts: int, num_experts_used: int, embed_dim: int, project_dim: int, activation: str, includes_bias: bool=True):
         super().__init__()
         self.embed_dim = embed_dim
         self.project_dim = project_dim
@@ -76,10 +76,16 @@ class MixtureofExpertsBlock(nn.Module):
         self.activation = retrieve_activation_function(activation)
         
         # Not supporting glu-based experts
-        self.experts_up = t.randn((num_experts, project_dim, embed_dim))
-        self.experts_down = t.randn((num_experts, embed_dim, project_dim))
+        self.expert_weights_up = t.randn((num_experts, project_dim, embed_dim))
+        self.expert_weights_down = t.randn((num_experts, embed_dim, project_dim))
+
+        self.includes_bias = includes_bias
+
+        if self.includes_bias:
+            self.expert_biases_up = t.randn((num_experts, project_dim))
+            self.expert_biases_down = t.randn((num_experts, embed_dim))
         
-        self.router = layers.Linear(embed_dim, num_experts)
+        self.router = layers.Linear(embed_dim, num_experts, includes_bias=False)
         self.num_experts_used = num_experts_used
 
     def forward(self, x: t.Tensor) -> t.Tensor:
@@ -90,21 +96,27 @@ class MixtureofExpertsBlock(nn.Module):
         router_logits, indices = t.topk(router_logits, k)
         router_weights = t.softmax(router_logits, dim=0)
 
-        experts_up_sparse = self.experts_up[indices.reshape(-1)]
-        experts_up_sparse = einops.rearrange(experts_up_sparse, '(b s k) u d -> b s k u d', s=s, k=k)
+        # Grab expert weights and biases
+        expert_weights_up_sparse = self.expert_weights_up[indices.reshape(-1)]
+        expert_weights_up_sparse = einops.rearrange(expert_weights_up_sparse, '(b s k) u d -> b s k u d', s=s, k=k)
+        if self.includes_bias:
+            expert_biases_up_sparse = self.expert_biases_up[indices.reshape(-1)]
+            expert_biases_up_sparse = einops.rearrange(expert_biases_up_sparse, '(b s k) u -> b s k u', s=s, k=k)
 
-        experts_down_sparse = self.experts_down[indices.reshape(-1)]
-        experts_down_sparse = einops.rearrange(experts_down_sparse, '(b s k) u d -> b s k u d', s=s, k=k)
+        expert_weights_down_sparse = self.expert_weights_down[indices.reshape(-1)]
+        expert_weights_down_sparse = einops.rearrange(expert_weights_down_sparse, '(b s k) d u -> b s k d u', s=s, k=k)
+        if self.includes_bias:
+            expert_biases_down_sparse = self.expert_biases_down[indices.reshape(-1)]
+            expert_biases_down_sparse = einops.rearrange(expert_biases_down_sparse, '(b s k) d -> b s k d', s=s, k=k)
 
-        print(x.shape)
-        x = t.einsum('bskud,bsd->bsku', experts_up_sparse,x)
-        print(x.shape)
+        x = t.einsum('bskud,bsd->bsku', expert_weights_up_sparse,x)
+        if self.includes_bias:
+            x += expert_biases_up_sparse
         x = self.activation(x)
-        print(x.shape)
-        x = t.einsum('bskdu,bsku->bskd', experts_down_sparse, x)
-        print(x.shape)
+        x = t.einsum('bskdu,bsku->bskd', expert_weights_down_sparse, x)
+        if self.includes_bias:
+            x += expert_biases_down_sparse
         x = t.einsum('bskd,bsk->bsd', x, router_weights)
-        print(x.shape)
 
         return x
 
@@ -219,7 +231,7 @@ class GQABlock(nn.Module):
 
 
 class TransformerDecoderBlock(nn.Module):
-    def __init__(self, embed_dim: int, num_heads: int, project_dim: int, activation: str, norm_type: str, num_heads_kv: Optional[int]=None, mlp_type: str='mlpblock', mha_type: str='mhablock', use_pre_norm: bool=True, parallel_layers: bool=False, dropout_rate: Optional[float]=None, rotary_embedding: bool=False, rotary_base: Optional[int]=None, rope_alternate: bool=False, mha_bias: bool=False, mlp_bias: bool=True):
+    def __init__(self, embed_dim: int, num_heads: int, project_dim: int, activation: str, norm_type: str, num_heads_kv: Optional[int]=None, mlp_type: str='mlpblock', mha_type: str='mhablock', use_pre_norm: bool=True, parallel_layers: bool=False, dropout_rate: Optional[float]=None, rotary_embedding: bool=False, rotary_base: Optional[int]=None, rope_alternate: bool=False, mha_bias: bool=False, mlp_bias: bool=True, num_experts: Optional[int]=None, num_experts_used:Optional[int]=None):
         super().__init__()
         self.embed_dim = embed_dim
         self.num_heads = num_heads
@@ -258,8 +270,12 @@ class TransformerDecoderBlock(nn.Module):
             self.mlp_block = MLPBlock(embed_dim, project_dim, activation, dropout_rate=self.dropout_rate, includes_bias=self.mlp_bias)
         elif mlp_type == 'glublock':
             self.mlp_block = GLUBlock(embed_dim, project_dim, activation, dropout_rate=self.dropout_rate, includes_bias=self.mlp_bias)
+        elif mlp_type == 'moeblock':
+            assert num_experts is not None
+            assert num_experts_used is not None
+            self.mlp_block = MixtureofExpertsBlock(num_experts, num_experts_used, embed_dim, project_dim, activation, includes_bias=self.mlp_bias)
         else:
-            raise NotImplementedError("MLP types other than mlpblock and glublock have not been implemented.")
+            raise NotImplementedError("MLP types other than mlpblock, glublock, and moeblock have not been implemented.")
 
         self.parallel_layers = parallel_layers
 
