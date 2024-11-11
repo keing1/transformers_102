@@ -1,5 +1,4 @@
 import torch as t
-from scipy.stats import norm
 import einops
 
 def relu(x: t.Tensor) -> t.Tensor:

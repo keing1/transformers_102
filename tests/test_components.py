@@ -4,8 +4,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torchtune import modules
 import einops
-import sys
-import os
 
 
 from src import activations, layers, blocks
