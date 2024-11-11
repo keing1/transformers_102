@@ -1,3 +1,4 @@
-__pycache__
-transformers_102.egg-info
+__pycache__/
+*.egg-info
 *llama7b*.pt
+build/
