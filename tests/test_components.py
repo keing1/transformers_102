@@ -184,21 +184,56 @@ class TestTransformerComponents(unittest.TestCase):
 
         assert t.allclose(mlp(x), torch_mlp(x), atol=1e-7)
         assert t.allclose(mlp(x2), torch_mlp(x2), atol=1e-7)
-        
-        # W1 = t.nn.Parameter(t.randn((project_dim, embed_dim)))
-        # b1 = t.nn.Parameter(t.randn(project_dim,))
-        # W2 = t.nn.Parameter(t.randn((project_dim, embed_dim)))
-        # b2 = t.nn.Parameter(t.randn(project_dim,))
-        # W3 = t.nn.Parameter(t.randn((embed_dim, project_dim)))
-        # b3 = t.nn.Parameter(t.randn((embed_dim,)))
 
-        # glu = blocks.GLUBlock(embed_dim, project_dim, activation)
-        # torch_lin1 = t.nn.Linear(embed_dim, project_dim)
-        # torch_lin2 = t.nn.Linear(embed_dim, project_dim)
-        # torch_lin3 = t.nn.Linear(project_dim, embed_dim)
-        
-        # TODO: Add GLU and MoE test
-        pass
+        # TODO: Add GLU test
+    
+    def test_moe_block(self):
+        embed_dim = 8
+        project_dim = 40
+        activation = 'relu'
+        batch_size = 1
+        seq_len = 2
+
+        num_experts = 4
+        num_experts_used = 2
+
+        # Testing copy of single mlp
+        mlp = blocks.MLPBlock(embed_dim, project_dim, activation)
+        moe = blocks.MixtureofExpertsBlock(num_experts, num_experts_used, embed_dim, project_dim, activation)
+
+        moe.expert_weights_up = einops.repeat(mlp.linear1.weight, '... -> repeat ...', repeat=num_experts)
+        moe.expert_weights_down = einops.repeat(mlp.linear2.weight, '... -> repeat ...', repeat=num_experts)
+        moe.expert_biases_up = einops.repeat(mlp.linear1.bias, '... -> repeat ...', repeat=num_experts)
+        moe.expert_biases_down = einops.repeat(mlp.linear2.bias, '... -> repeat ...', repeat=num_experts)
+
+        x = t.randn((batch_size,seq_len,embed_dim))
+
+        assert t.allclose(mlp(x), moe(x))
+
+        # Test weighted average
+        batch_size = 1
+        seq_len = 1
+        num_experts = 3
+        num_experts_used = 2
+        mlps = [blocks.MLPBlock(embed_dim, project_dim, activation) for _ in range(num_experts)]
+        moe = blocks.MixtureofExpertsBlock(num_experts, num_experts_used, embed_dim, project_dim, activation)
+
+        moe.expert_weights_up = t.stack([mlps[i].linear1.weight for i in range(num_experts)])
+        moe.expert_weights_down = t.stack([mlps[i].linear2.weight for i in range(num_experts)])
+        moe.expert_biases_up = t.stack([mlps[i].linear1.bias for i in range(num_experts)])
+        moe.expert_biases_down = t.stack([mlps[i].linear2.bias for i in range(num_experts)])
+
+        router_layer = moe.router
+
+        x = t.randn((batch_size,seq_len,embed_dim))
+
+        router_logits = router_layer(x)
+        router_logits, indices = t.topk(router_logits, num_experts_used)
+        router_weights = t.softmax(router_logits, dim=-1)
+
+        mlp_out = mlps[indices[0][0][0]](x) * router_weights[0][0][0] + mlps[indices[0][0][1]](x) * router_weights[0][0][1]
+
+        assert t.allclose(mlp_out, moe(x))
 
     def test_gqa_block(self):
         embed_dim = 36

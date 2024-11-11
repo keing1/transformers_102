@@ -94,7 +94,7 @@ class MixtureofExpertsBlock(nn.Module):
 
         router_logits = self.router(x)
         router_logits, indices = t.topk(router_logits, k)
-        router_weights = t.softmax(router_logits, dim=0)
+        router_weights = t.softmax(router_logits, dim=-1)
 
         # Grab expert weights and biases
         expert_weights_up_sparse = self.expert_weights_up[indices.reshape(-1)]
