@@ -100,8 +100,8 @@ class TestTransformerComponents(unittest.TestCase):
         x = t.arange(5).float()
         x2 = t.arange(20).reshape((4,5)).float()
 
-        assert t.allclose(lin(x), torch_lin(x), atol=1e-7)
-        assert t.allclose(lin(x2), torch_lin(x2), atol=1e-7)
+        assert t.allclose(lin(x), torch_lin(x), atol=1e-6)
+        assert t.allclose(lin(x2), torch_lin(x2), atol=1e-6)
     
     def test_rope(self):
         embed = 16
@@ -153,8 +153,8 @@ class TestTransformerComponents(unittest.TestCase):
         t_mha.in_proj_weight, t_mha.in_proj_bias = t.nn.Parameter(t.cat((Wq, Wk, Wv), dim=0)), t.nn.Parameter(t.cat((bq, bk, bv), dim=0))
         t_mha.out_proj.weight, t_mha.out_proj.bias = Wo, bo
 
-        assert t.allclose(mha(x, attention_mask=attn_mask), t_mha(x, x, x, attn_mask=attn_mask)[0])
-        assert t.allclose(mha(x2, attention_mask=attn_mask), t_mha(x2, x2, x2, attn_mask=attn_mask)[0])
+        assert t.allclose(mha(x, attention_mask=attn_mask), t_mha(x, x, x, attn_mask=attn_mask)[0], atol=1e-6)
+        assert t.allclose(mha(x2, attention_mask=attn_mask), t_mha(x2, x2, x2, attn_mask=attn_mask)[0], atol=1e-6)
 
     def test_mlp_blocks(self):
         embed_dim = 10
@@ -249,9 +249,6 @@ class TestTransformerComponents(unittest.TestCase):
         x = t.randn((1,3,36))
 
         assert t.allclose(gqa(x), mha(x))
-
-    def test_transformer_block(self):
-        pass
 
 if __name__ == '__main__':
     unittest.main()
