@@ -1,7 +1,7 @@
 import torch as t
 from torch import nn
 import einops
-from typing import Optional
+from typing import Optional, Tuple
 
 from src import activations, layers
 
@@ -75,7 +75,6 @@ class MixtureofExpertsBlock(nn.Module):
 
         self.activation = retrieve_activation_function(activation)
         
-        # Not supporting glu-based experts
         self.expert_weights_up = nn.Parameter(t.randn((num_experts, project_dim, embed_dim)))
         self.expert_weights_down = nn.Parameter(t.randn((num_experts, embed_dim, project_dim)))
 
@@ -87,6 +86,23 @@ class MixtureofExpertsBlock(nn.Module):
         
         self.router = layers.Linear(embed_dim, num_experts, includes_bias=False)
         self.num_experts_used = num_experts_used
+    
+    def _select_top_k_expert_params(self, indices: t.Tensor, s: int) -> Tuple[t.Tensor, Optional[t.Tensor], t.Tensor, Optional[t.Tensor]]:
+        k = self.num_experts_used
+
+        weights_up_sparse = einops.rearrange(self.expert_weights_up[indices.reshape(-1)], '(b s k) u d -> b s k u d', s=s, k=k)
+        if self.includes_bias:
+            biases_up_sparse = einops.rearrange(self.expert_biases_up[indices.reshape(-1)], '(b s k) u -> b s k u', s=s, k=k)
+        else:
+            biases_up_sparse = None
+
+        weights_down_sparse = einops.rearrange(self.expert_weights_down[indices.reshape(-1)], '(b s k) d u -> b s k d u', s=s, k=k)
+        if self.includes_bias:
+            biases_down_sparse = einops.rearrange(self.expert_biases_down[indices.reshape(-1)], '(b s k) d -> b s k d', s=s, k=k)
+        else:
+            biases_down_sparse = None
+        
+        return weights_up_sparse, biases_up_sparse, weights_down_sparse, biases_down_sparse
 
     def forward(self, x: t.Tensor) -> t.Tensor:
         s = x.shape[-2]
@@ -97,25 +113,15 @@ class MixtureofExpertsBlock(nn.Module):
         router_weights = t.softmax(router_logits, dim=-1)
 
         # Select weights and biases from active experts
-        expert_weights_up_sparse = self.expert_weights_up[indices.reshape(-1)]
-        expert_weights_up_sparse = einops.rearrange(expert_weights_up_sparse, '(b s k) u d -> b s k u d', s=s, k=k)
-        if self.includes_bias:
-            expert_biases_up_sparse = self.expert_biases_up[indices.reshape(-1)]
-            expert_biases_up_sparse = einops.rearrange(expert_biases_up_sparse, '(b s k) u -> b s k u', s=s, k=k)
+        weights_up, biases_up, weights_down, biases_down = self._select_top_k_expert_params(indices, s)
 
-        expert_weights_down_sparse = self.expert_weights_down[indices.reshape(-1)]
-        expert_weights_down_sparse = einops.rearrange(expert_weights_down_sparse, '(b s k) d u -> b s k d u', s=s, k=k)
+        x = t.einsum('bskud,bsd->bsku', weights_up,x)
         if self.includes_bias:
-            expert_biases_down_sparse = self.expert_biases_down[indices.reshape(-1)]
-            expert_biases_down_sparse = einops.rearrange(expert_biases_down_sparse, '(b s k) d -> b s k d', s=s, k=k)
-
-        x = t.einsum('bskud,bsd->bsku', expert_weights_up_sparse,x)
-        if self.includes_bias:
-            x += expert_biases_up_sparse
+            x += biases_up
         x = self.activation(x)
-        x = t.einsum('bskdu,bsku->bskd', expert_weights_down_sparse, x)
+        x = t.einsum('bskdu,bsku->bskd', weights_down, x)
         if self.includes_bias:
-            x += expert_biases_down_sparse
+            x += biases_down
         x = t.einsum('bskd,bsk->bsd', x, router_weights)
 
         return x
