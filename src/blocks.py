@@ -96,7 +96,7 @@ class MixtureofExpertsBlock(nn.Module):
         router_logits, indices = t.topk(router_logits, k)
         router_weights = t.softmax(router_logits, dim=-1)
 
-        # Grab expert weights and biases
+        # Select weights and biases from active experts
         expert_weights_up_sparse = self.expert_weights_up[indices.reshape(-1)]
         expert_weights_up_sparse = einops.rearrange(expert_weights_up_sparse, '(b s k) u d -> b s k u d', s=s, k=k)
         if self.includes_bias:
