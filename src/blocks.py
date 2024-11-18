@@ -20,6 +20,7 @@ def retrieve_activation_function(activation: str):
     except KeyError:
         raise NotImplementedError("Only relu, gelu, swish, and sigmoid activation functions are implemented.")
 
+
 class MLPBlock(nn.Module):
     def __init__(self, embed_dim: int, project_dim: int, activation: str, dropout_rate: Optional[float]=None, includes_bias: bool=True):
         super().__init__()
@@ -66,6 +67,7 @@ class GLUBlock(nn.Module):
             return self.dropout_layer(x)
         else:
             return x
+
 
 class MixtureofExpertsBlock(nn.Module):
     def __init__(self, num_experts: int, num_experts_used: int, embed_dim: int, project_dim: int, activation: str, includes_bias: bool=True):
@@ -126,6 +128,7 @@ class MixtureofExpertsBlock(nn.Module):
 
         return x
 
+
 class MultiheadAttentionBlock(nn.Module):
     def __init__(self, embed_dim: int, num_heads: int, rotary_embedding: bool=False, rotary_base: Optional[int]=None, rope_alternate: bool=False, includes_bias: bool=False, dropout_rate: Optional[float]=None):
         super().__init__()
@@ -183,6 +186,7 @@ class MultiheadAttentionBlock(nn.Module):
             return self.dropout_layer_2(res)
         else:
             return res
+
 
 class GQABlock(nn.Module):
     def __init__(self, embed_dim: int, num_heads_q: int, num_heads_kv: int, rotary_embedding: bool=False, rotary_base: Optional[int]=None):

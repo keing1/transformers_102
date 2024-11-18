@@ -3,6 +3,7 @@ from torch import nn
 from typing import Tuple
 import einops
 
+
 class LayerNorm(nn.Module):
     def __init__(self, data_shape: Tuple[int, ...], eps: float=1e-5, includes_bias: bool=True):
         super().__init__()
@@ -26,6 +27,7 @@ class LayerNorm(nn.Module):
         if self.includes_bias:
             out_x += self.bias
         return out_x
+
 
 class RMSNorm(nn.Module):
     def __init__(self, data_shape: Tuple[int, ...], eps: float=0):
@@ -75,6 +77,7 @@ class Linear(nn.Module):
             x += self.bias
         return x
 
+
 class Dropout(nn.Module):
     def __init__(self, dropout_rate: float):
         super().__init__()
@@ -88,6 +91,7 @@ class Dropout(nn.Module):
             return x
         else:
             return x
+
 
 class RotaryPositionEmbedding(nn.Module):
     def __init__(self, embed_dim: int, base: int=10000):

@@ -2,6 +2,7 @@ import torch as t
 
 from src import layers, blocks
 
+
 class GPT2Embedding(t.nn.Module):
     def __init__(self, num_token_embeddings: int, embedding_dim: int, context_length: int):
         super().__init__()
@@ -16,6 +17,7 @@ class GPT2Embedding(t.nn.Module):
         x_pos = self.position_embedding_layer(pos_tensor)
         x_tok = self.token_embedding_layer(x)
         return x_tok + x_pos
+
 
 class GPT2SmallModel(t.nn.Module):
     def __init__(self):
@@ -42,8 +44,8 @@ class GPT2SmallModel(t.nn.Module):
 
         # Tied unembedding
         x = t.einsum('th, ...h -> ...t', self.embedding_layer.token_embedding_layer.weight, x)
-
         return x
+
 
 class Llama7BModel(t.nn.Module):
     def __init__(self):
