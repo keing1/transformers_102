@@ -115,6 +115,16 @@ class TestTransformerComponents(unittest.TestCase):
         t_x = einops.rearrange(x, 'b h s d -> b s h d')
 
         assert t.allclose(my_rpe(x), einops.rearrange(torch_rpe(t_x), 'b s h d -> b h s d'))
+    
+    def test_rope_start_index(self):
+        embed = 16
+        base = 1000
+        start_index = 2
+        rpe = layers.RotaryPositionEmbedding(embed, base=base)
+
+        x = t.arange(768).float().reshape((2,8,3,16))
+
+        assert t.allclose(rpe(x)[:,:,start_index:], rpe(x[:,:,start_index:], start_index=start_index))
 
     def test_attention_block(self):
         embed_dim = 10
