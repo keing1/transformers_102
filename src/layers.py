@@ -100,7 +100,7 @@ class RotaryPositionEmbedding(nn.Module):
         self.embed_dim = embed_dim
         self.base = base
 
-    def forward(self, x: t.Tensor, rope_alternate: bool=False) -> t.Tensor:
+    def forward(self, x: t.Tensor, rope_alternate: bool=False, start_index: int=0) -> t.Tensor:
         # Assumes x has dimensions (..., s, d) where s is sequence and d is the embedding dimensions, other dimensions are treated
         # as batch dimensions
         # TODO: Include positional input for RoPE at inference time
@@ -116,7 +116,7 @@ class RotaryPositionEmbedding(nn.Module):
         
         theta_vec = t.pow(self.base, (-2 * (t.arange(self.embed_dim) // 2)) / self.embed_dim)
         seq_len = x.shape[-2]
-        theta_prod = theta_vec * t.arange(seq_len).unsqueeze(dim=1)
+        theta_prod = theta_vec * t.arange(start_index, start_index+seq_len).unsqueeze(dim=1)
 
         rot_vec_cos = t.cos(theta_prod)
         rot_vec_sin = t.sin(theta_prod)
