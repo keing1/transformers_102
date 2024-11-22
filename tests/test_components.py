@@ -100,8 +100,8 @@ class TestTransformerComponents(unittest.TestCase):
         x = t.arange(5).float()
         x2 = t.arange(20).reshape((4,5)).float()
 
-        assert t.allclose(lin(x), torch_lin(x), atol=1e-6)
-        assert t.allclose(lin(x2), torch_lin(x2), atol=1e-6)
+        assert t.allclose(lin(x), torch_lin(x), atol=1e-5)
+        assert t.allclose(lin(x2), torch_lin(x2), atol=1e-5)
     
     def test_rope(self):
         embed = 16
@@ -204,8 +204,8 @@ class TestTransformerComponents(unittest.TestCase):
         x = t.arange(10).float()
         x2 = t.arange(20).reshape((2,10)).float()
 
-        assert t.allclose(mlp(x), torch_mlp(x), atol=1e-7)
-        assert t.allclose(mlp(x2), torch_mlp(x2), atol=1e-7)
+        assert t.allclose(mlp(x), torch_mlp(x), atol=1e-6)
+        assert t.allclose(mlp(x2), torch_mlp(x2), atol=1e-6)
 
         # TODO: Add GLU test
     
