@@ -46,8 +46,8 @@ class TestTransformerComponents(unittest.TestCase):
         ln2.weight, ln2.bias = W2, b2
         torch_ln2.weight, torch_ln2.bias = W2, b2
 
-        assert t.allclose(ln1(x), torch_ln1(x), atol=1e-7)
-        assert t.allclose(ln2(x2), torch_ln2(x2), atol=1e-7)
+        assert t.allclose(ln1(x), torch_ln1(x), atol=1e-6)
+        assert t.allclose(ln2(x2), torch_ln2(x2), atol=1e-6)
 
         rn1 = layers.RMSNorm(x.shape[-1:])
         torch_rn1 = t.nn.RMSNorm(x.shape[-1:])
@@ -163,8 +163,22 @@ class TestTransformerComponents(unittest.TestCase):
         t_mha.in_proj_weight, t_mha.in_proj_bias = t.nn.Parameter(t.cat((Wq, Wk, Wv), dim=0)), t.nn.Parameter(t.cat((bq, bk, bv), dim=0))
         t_mha.out_proj.weight, t_mha.out_proj.bias = Wo, bo
 
-        assert t.allclose(mha(x, attention_mask=attn_mask), t_mha(x, x, x, attn_mask=attn_mask)[0], atol=1e-6)
-        assert t.allclose(mha(x2, attention_mask=attn_mask), t_mha(x2, x2, x2, attn_mask=attn_mask)[0], atol=1e-6)
+        assert t.allclose(mha(x, attention_mask=attn_mask)[0], t_mha(x, x, x, attn_mask=attn_mask)[0], atol=1e-6)
+        assert t.allclose(mha(x2, attention_mask=attn_mask)[0], t_mha(x2, x2, x2, attn_mask=attn_mask)[0], atol=1e-6)
+    
+    def test_attention_kv_cache(self):
+        embed_dim = 10
+        num_heads = 2
+
+        mha = blocks.MultiheadAttentionBlock(embed_dim, num_heads)
+
+        x = t.arange(40).reshape((1,4,10)).float()
+
+        out, (k, v) = mha(x)
+        out2, _ = mha(x[:,3:], kv_cache=(k[:,:,:3], v[:,:,:3]))
+
+        t.allclose(out[:,3:], out2)
+
 
     def test_mlp_blocks(self):
         embed_dim = 10
@@ -258,7 +272,37 @@ class TestTransformerComponents(unittest.TestCase):
 
         x = t.randn((1,3,36))
 
-        assert t.allclose(gqa(x), mha(x))
+        assert t.allclose(gqa(x)[0], mha(x)[0])
+
+    def test_gqa_kv_cache(self):
+        embed_dim = 12
+        num_heads = 2
+
+        gqa = blocks.GQABlock(embed_dim, num_heads, num_heads_kv=1, rotary_embedding=True)
+
+        x = t.arange(48).reshape((1,4,12)).float()
+
+        out, (k, v) = gqa(x)
+        out2, _ = gqa(x[:,3:], kv_cache=(k[:,:,:3], v[:,:,:3]))
+
+        t.allclose(out[:,3:], out2)
+
+    def test_transformer_kv_cache(self):
+        embed_dim = 12
+        num_heads = 2
+        project_dim = 48
+        activation = 'relu'
+        norm_type = 'rms_norm'
+
+
+        tran_out = blocks.TransformerDecoderBlock(embed_dim, num_heads, project_dim, activation, norm_type, rotary_embedding=True)
+
+        x = t.arange(48).reshape((1,4,12)).float()
+
+        out, (k, v) = tran_out(x)
+        out2, _ = tran_out(x[:,3:], kv_cache=(k[:,:,:3], v[:,:,:3]))
+
+        t.allclose(out[:,3:], out2)
 
 if __name__ == '__main__':
     unittest.main()

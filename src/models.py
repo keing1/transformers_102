@@ -39,7 +39,7 @@ class GPT2SmallModel(t.nn.Module):
         x = self.embedding_layer(x)
         x = self.init_dropout_layer(x)
         for block in self.transformer_blocks:
-            x = block(x)
+            x, _ = block(x)
         x = self.final_ln(x)
 
         # Tied unembedding
@@ -66,7 +66,7 @@ class Llama7BModel(t.nn.Module):
     def forward(self, x: t.Tensor) -> t.Tensor:
         x = self.embedding_layer(x)
         for block in self.transformer_blocks:
-            x = block(x)
+            x, _ = block(x)
         
         x = self.final_rn(x)
         x = self.unembedding_layer(x)

@@ -160,14 +160,20 @@ class MultiheadAttentionBlock(nn.Module):
             self.dropout_layer_1 = layers.Dropout(self.dropout_rate)
             self.dropout_layer_2 = layers.Dropout(self.dropout_rate)
     
-    def forward(self, x: t.Tensor, attention_mask: Optional[t.Tensor]=None) -> t.Tensor:
+    def forward(self, x: t.Tensor, attention_mask: Optional[t.Tensor]=None, kv_cache: Optional[Tuple[t.Tensor, t.Tensor]]=None) -> t.Tensor:
         Q = einops.rearrange(self.linear_q(x), '... s (head dhead) -> ... head s dhead', head=self.num_heads)
         K = einops.rearrange(self.linear_k(x), '... s (head dhead) -> ... head s dhead', head=self.num_heads)
         V = einops.rearrange(self.linear_v(x), '... s (head dhead) -> ... head s dhead', head=self.num_heads)
     
         if self.rotary_embedding:
-            Q = self.rotary_layer(Q, rope_alternate=self.rope_alternate)
-            K = self.rotary_layer(K, rope_alternate=self.rope_alternate)
+            start_index = 0 if kv_cache is None else kv_cache[0].shape[-2]
+            Q = self.rotary_layer(Q, rope_alternate=self.rope_alternate, start_index=start_index)
+            K = self.rotary_layer(K, rope_alternate=self.rope_alternate, start_index=start_index)
+        
+        if kv_cache is not None:
+            (K_cache, V_cache) = kv_cache
+            K = t.cat([K_cache, K], dim=-2)
+            V = t.cat([V_cache, V], dim=-2)
 
         pre_att_pattern = t.einsum('... h s d, ... h t d -> ... h s t', Q, K)
         pre_att_pattern /= self.head_dim ** 0.5
@@ -179,13 +185,13 @@ class MultiheadAttentionBlock(nn.Module):
         if self.dropout_rate is not None:
             att_pattern = self.dropout_layer_1(att_pattern)
 
-        res = t.einsum('... h s t, ... h t d -> ... h s d', att_pattern, V)
-        res = einops.rearrange(res, '... head s dhead -> ... s (head dhead)')
-        res = self.linear_o(res)
+        out = t.einsum('... h s t, ... h t d -> ... h s d', att_pattern, V)
+        out = einops.rearrange(out, '... head s dhead -> ... s (head dhead)')
+        out = self.linear_o(out)
         if self.dropout_rate is not None:
-            return self.dropout_layer_2(res)
-        else:
-            return res
+            out = self.dropout_layer_2(out)
+        
+        return out, (K, V)
 
 
 class GQABlock(nn.Module):
@@ -216,14 +222,20 @@ class GQABlock(nn.Module):
         self.linear_v = layers.Linear(embed_dim, num_heads_kv*self.head_dim, includes_bias=False)
         self.linear_o = layers.Linear(embed_dim, embed_dim, includes_bias=False)
 
-    def forward(self, x: t.Tensor, attention_mask: Optional[t.Tensor]=None) -> t.Tensor:
+    def forward(self, x: t.Tensor, attention_mask: Optional[t.Tensor]=None, kv_cache: Optional[Tuple[t.Tensor, t.Tensor]]=None) -> t.Tensor:
         Q = einops.rearrange(self.linear_q(x), '... s (head dhead) -> ... head s dhead', head=self.num_heads_q)
         K = einops.rearrange(self.linear_k(x), '... s (head dhead) -> ... head s dhead', head=self.num_heads_kv)
         V = einops.rearrange(self.linear_v(x), '... s (head dhead) -> ... head s dhead', head=self.num_heads_kv)
     
         if self.rotary_embedding:
-            Q = self.rotary_layer(Q)
-            K = self.rotary_layer(K)
+            start_index = 0 if kv_cache is None else kv_cache[0].shape[-2]
+            Q = self.rotary_layer(Q, start_index=start_index)
+            K = self.rotary_layer(K, start_index=start_index)
+
+        if kv_cache is not None:
+            (K_cache, V_cache) = kv_cache
+            K = t.cat([K_cache, K], dim=-2)
+            V = t.cat([V_cache, V], dim=-2)
 
         Q = einops.rearrange(Q, '... (head group) s dhead -> ... head group s dhead', group=self.num_heads_kv)
 
@@ -237,7 +249,7 @@ class GQABlock(nn.Module):
 
         res = t.einsum('... h g s t, ... g t d -> ... h g s d', att_pattern, V)
         res = einops.rearrange(res, '... head group s dhead -> ... s (head group dhead)')
-        return self.linear_o(res)
+        return self.linear_o(res), (K, V)
 
 
 class TransformerDecoderBlock(nn.Module):
@@ -272,7 +284,7 @@ class TransformerDecoderBlock(nn.Module):
         if mha_type == 'mhablock':
             self.mha_block = MultiheadAttentionBlock(embed_dim, num_heads, dropout_rate=self.dropout_rate, rotary_embedding=self.rotary_embedding, rotary_base=self.rotary_base, rope_alternate=self.rope_alternate, includes_bias=self.mha_bias)
         elif mha_type == 'gqablock':
-            self.mha_lock = GQABlock(embed_dim, num_heads, num_heads_kv, rotary_embedding=self.rotary_embedding, rotary_base=self.rotary_base)
+            self.mha_block = GQABlock(embed_dim, num_heads, num_heads_kv, rotary_embedding=self.rotary_embedding, rotary_base=self.rotary_base)
         else:
             raise NotImplementedError("Attention types other than mhablock and gqablock have not been implemented.")
 
@@ -289,21 +301,26 @@ class TransformerDecoderBlock(nn.Module):
 
         self.parallel_layers = parallel_layers
 
-    def forward(self, x: t.Tensor) -> t.Tensor:
+    def forward(self, x: t.Tensor, kv_cache: Optional[Tuple[t.Tensor, t.Tensor]]=None) -> t.Tensor:
         # Building a decoder mask where all entries above the diagonal are negative infinity and all others are zero
-        seq_len = x.shape[-2]
-        att_mask = t.where(t.arange(seq_len).unsqueeze(1) < t.arange(seq_len), -t.inf, 0)
+        total_seq_len = x.shape[-2]
+        if kv_cache is not None:
+            cache_len = kv_cache[0].shape[-2]
+            total_seq_len += cache_len
+        att_mask = t.where(t.arange(total_seq_len).unsqueeze(1) < t.arange(total_seq_len), -t.inf, 0)
+        if kv_cache is not None:
+            att_mask = att_mask[cache_len:]
 
         if self.parallel_layers:
             if self.use_pre_norm:
-                return x + self.mha_block(self.norm_layer1(x), attention_mask=att_mask) + self.mlp_block(self.norm_layer2(x))
+                return x + self.mha_block(self.norm_layer1(x), attention_mask=att_mask, kv_cache=kv_cache)[0] + self.mlp_block(self.norm_layer2(x)), kv_cache
             else:
                 # Not sure if anyone has actually done this
-                return self.norm_layer1(x + self.mha_block(x, attention_mask=att_mask) + self.mlp_block(x))
+                return self.norm_layer1(x + self.mha_block(x, attention_mask=att_mask, kv_cache=kv_cache)[0] + self.mlp_block(x)), kv_cache
         else:
             if self.use_pre_norm:
-                x = x + self.mha_block(self.norm_layer1(x), attention_mask=att_mask)
-                return x + self.mlp_block(self.norm_layer2(x))
+                x = x + self.mha_block(self.norm_layer1(x), attention_mask=att_mask, kv_cache=kv_cache)[0]
+                return x + self.mlp_block(self.norm_layer2(x)), kv_cache
             else:
-                x = self.norm_layer1(x + self.mha_block(x, attention_mask=att_mask))
-                return self.norm_layer2(x + self.mlp_block(x))
+                x = self.norm_layer1(x + self.mha_block(x, attention_mask=att_mask, kv_cache=kv_cache)[0])
+                return self.norm_layer2(x + self.mlp_block(x)), kv_cache
