@@ -21,6 +21,6 @@ def sigmoid(x: t.Tensor) -> t.Tensor:
 def softmax(x: t.Tensor) -> t.Tensor:
     # Subtracting max for stability
     x_max = einops.reduce(x, '... d -> ... 1', 'max')
-    x -= x_max
+    x = x - x_max
     x = t.exp(x)
     return x/einops.reduce(x, '... d -> ... 1', 'sum')

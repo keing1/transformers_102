@@ -119,11 +119,11 @@ class MixtureofExpertsBlock(nn.Module):
 
         x = t.einsum('bskud,bsd->bsku', weights_up,x)
         if self.includes_bias:
-            x += biases_up
+            x = x + biases_up
         x = self.activation(x)
         x = t.einsum('bskdu,bsku->bskd', weights_down, x)
         if self.includes_bias:
-            x += biases_down
+            x = x + biases_down
         x = t.einsum('bskd,bsk->bsd', x, router_weights)
 
         return x
@@ -176,10 +176,10 @@ class MultiheadAttentionBlock(nn.Module):
             V = t.cat([V_cache, V], dim=-2)
 
         pre_att_pattern = t.einsum('... h s d, ... h t d -> ... h s t', Q, K)
-        pre_att_pattern /= self.head_dim ** 0.5
+        pre_att_pattern = pre_att_pattern / self.head_dim ** 0.5
 
         if attention_mask is not None:
-            pre_att_pattern += attention_mask
+            pre_att_pattern = pre_att_pattern + attention_mask
 
         att_pattern = t.softmax(pre_att_pattern, dim=-1)
         if self.dropout_rate is not None:
@@ -240,10 +240,10 @@ class GQABlock(nn.Module):
         Q = einops.rearrange(Q, '... (head group) s dhead -> ... head group s dhead', group=self.num_heads_kv)
 
         pre_att_pattern = t.einsum('... h g s d, ... g t d -> ... h g s t', Q, K)
-        pre_att_pattern /= self.head_dim ** 0.5
+        pre_att_pattern = pre_att_pattern / self.head_dim ** 0.5
 
         if attention_mask is not None:
-            pre_att_pattern += attention_mask
+            pre_att_pattern = pre_att_pattern + attention_mask
 
         att_pattern = t.softmax(pre_att_pattern, dim=-1)
 
@@ -313,14 +313,18 @@ class TransformerDecoderBlock(nn.Module):
 
         if self.parallel_layers:
             if self.use_pre_norm:
-                return x + self.mha_block(self.norm_layer1(x), attention_mask=att_mask, kv_cache=kv_cache)[0] + self.mlp_block(self.norm_layer2(x)), kv_cache
+                att_out, kv_cache = self.mha_block(self.norm_layer1(x), attention_mask=att_mask, kv_cache=kv_cache)
+                return x + att_out + self.mlp_block(self.norm_layer2(x)), kv_cache
             else:
                 # Not sure if anyone has actually done this
-                return self.norm_layer1(x + self.mha_block(x, attention_mask=att_mask, kv_cache=kv_cache)[0] + self.mlp_block(x)), kv_cache
+                att_out, kv_cache = self.mha_block(x, attention_mask=att_mask, kv_cache=kv_cache)
+                return self.norm_layer1(x + att_out + self.mlp_block(x)), kv_cache
         else:
             if self.use_pre_norm:
-                x = x + self.mha_block(self.norm_layer1(x), attention_mask=att_mask, kv_cache=kv_cache)[0]
+                att_out, kv_cache = self.mha_block(self.norm_layer1(x), attention_mask=att_mask, kv_cache=kv_cache)
+                x = x + att_out
                 return x + self.mlp_block(self.norm_layer2(x)), kv_cache
             else:
-                x = self.norm_layer1(x + self.mha_block(x, attention_mask=att_mask, kv_cache=kv_cache)[0])
+                att_out, kv_cache = self.mha_block(x, attention_mask=att_mask, kv_cache=kv_cache)
+                x = self.norm_layer1(x + att_out)
                 return self.norm_layer2(x + self.mlp_block(x)), kv_cache

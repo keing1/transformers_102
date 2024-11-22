@@ -25,7 +25,7 @@ class LayerNorm(nn.Module):
 
         out_x = normed_x * self.weight
         if self.includes_bias:
-            out_x += self.bias
+            out_x = out_x + self.bias
         return out_x
 
 
@@ -74,7 +74,7 @@ class Linear(nn.Module):
     def forward(self, x: t.Tensor) -> t.Tensor:
         x = t.einsum('oi,...i-> ...o', self.weight, x)
         if self.includes_bias:
-            x += self.bias
+            x = x + self.bias
         return x
 
 
@@ -86,8 +86,8 @@ class Dropout(nn.Module):
     def forward(self, x: t.Tensor) -> t.Tensor:
         if self.training:
             random_mask = t.rand(x.shape) > self.dropout_rate
-            x *= random_mask
-            x *= 1/(1-self.dropout_rate)
+            x = x * random_mask
+            x = x * 1/(1-self.dropout_rate)
             return x
         else:
             return x
