@@ -2,10 +2,8 @@ import torch as t
 from torch import nn
 import einops
 from typing import Optional, Tuple
-
 from src import activations, layers
 
-# TODO: Allow for more efficient inference (kv-caching and rope position)
 
 def retrieve_activation_function(activation: str):
     name_function_mapping = {
