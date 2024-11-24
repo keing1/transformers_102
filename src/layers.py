@@ -16,7 +16,7 @@ class LayerNorm(nn.Module):
             self.bias = nn.Parameter(t.zeros(self.data_shape))
     
     def forward(self, x: t.Tensor) -> t.Tensor:
-        # Calcualte mean and variance over all dimensions but the first
+        # Calculate mean and variance over all dimensions but the first
         agg_dims = tuple(range(len(x.shape)-len(self.data_shape), len(x.shape)))
         x_mean = t.mean(x, dim=agg_dims, keepdim=True)
         x_var = t.var(x, dim=agg_dims, keepdim=True, correction=0)
@@ -101,9 +101,8 @@ class RotaryPositionEmbedding(nn.Module):
         self.base = base
 
     def forward(self, x: t.Tensor, rope_alternate: bool=False, start_index: int=0) -> t.Tensor:
-        # Assumes x has dimensions (..., s, d) where s is sequence and d is the embedding dimensions, other dimensions are treated
+        # x has dimensions (..., s, d) where s is sequence and d is the embedding dimensions, other dimensions are treated
         # as batch dimensions
-        # TODO: Include positional input for RoPE at inference time
         assert x.shape[-1] == self.embed_dim
 
         # Llama uses an alternate version of RoPE that rotates different 2D subspaces: https://discuss.huggingface.co/t/is-llama-rotary-embedding-implementation-correct/44509/3

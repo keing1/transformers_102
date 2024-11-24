@@ -24,13 +24,10 @@ def retrieve_activation_function(activation: str):
 class MLPBlock(nn.Module):
     def __init__(self, embed_dim: int, project_dim: int, activation: str, dropout_rate: Optional[float]=None, includes_bias: bool=True):
         super().__init__()
-        self.embed_dim = embed_dim
-        self.project_dim = project_dim
-
         self.activation = retrieve_activation_function(activation)
 
-        self.linear1 = layers.Linear(self.embed_dim, self.project_dim, includes_bias=includes_bias)
-        self.linear2 = layers.Linear(self.project_dim, self.embed_dim, includes_bias=includes_bias)
+        self.linear1 = layers.Linear(embed_dim, project_dim, includes_bias=includes_bias)
+        self.linear2 = layers.Linear(project_dim, embed_dim, includes_bias=includes_bias)
 
         self.dropout_rate = dropout_rate
         if self.dropout_rate:
@@ -47,14 +44,11 @@ class MLPBlock(nn.Module):
 class GLUBlock(nn.Module):
     def __init__(self, embed_dim: int, project_dim: int, activation: str, dropout_rate: Optional[float]=None, includes_bias: bool=True):
         super().__init__()
-        self.embed_dim = embed_dim
-        self.project_dim = project_dim
-
         self.activation = retrieve_activation_function(activation)
 
-        self.linear_gate = layers.Linear(self.embed_dim, self.project_dim, includes_bias=includes_bias)
-        self.linear_up = layers.Linear(self.embed_dim, self.project_dim, includes_bias=includes_bias)
-        self.linear_down = layers.Linear(self.project_dim, self.embed_dim, includes_bias=includes_bias)
+        self.linear_gate = layers.Linear(embed_dim, project_dim, includes_bias=includes_bias)
+        self.linear_up = layers.Linear(embed_dim, project_dim, includes_bias=includes_bias)
+        self.linear_down = layers.Linear(project_dim, embed_dim, includes_bias=includes_bias)
 
         self.dropout_rate = dropout_rate
         if self.dropout_rate:
@@ -72,9 +66,6 @@ class GLUBlock(nn.Module):
 class MixtureofExpertsBlock(nn.Module):
     def __init__(self, num_experts: int, num_experts_used: int, embed_dim: int, project_dim: int, activation: str, includes_bias: bool=True):
         super().__init__()
-        self.embed_dim = embed_dim
-        self.project_dim = project_dim
-
         self.activation = retrieve_activation_function(activation)
         
         self.expert_weights_up = nn.Parameter(t.randn((num_experts, project_dim, embed_dim)))
@@ -132,20 +123,18 @@ class MixtureofExpertsBlock(nn.Module):
 class MultiheadAttentionBlock(nn.Module):
     def __init__(self, embed_dim: int, num_heads: int, rotary_embedding: bool=False, rotary_base: Optional[int]=None, rope_alternate: bool=False, includes_bias: bool=False, dropout_rate: Optional[float]=None):
         super().__init__()
-        self.embed_dim = embed_dim
         self.num_heads = num_heads
 
         assert embed_dim % num_heads == 0
         # Assuming head_dim = embed_dim / num_heads
-        self.head_dim = self.embed_dim//self.num_heads
+        self.head_dim = embed_dim//self.num_heads
 
         self.rotary_embedding = rotary_embedding
-        self.rotary_base = rotary_base
         self.rope_alternate = rope_alternate
 
         if self.rotary_embedding:
-            if self.rotary_base is not None:
-                self.rotary_layer = layers.RotaryPositionEmbedding(self.head_dim, self.rotary_base)
+            if rotary_base is not None:
+                self.rotary_layer = layers.RotaryPositionEmbedding(self.head_dim, rotary_base)
             else:
                 self.rotary_layer = layers.RotaryPositionEmbedding(self.head_dim)
 
@@ -197,23 +186,21 @@ class MultiheadAttentionBlock(nn.Module):
 class GQABlock(nn.Module):
     def __init__(self, embed_dim: int, num_heads_q: int, num_heads_kv: int, rotary_embedding: bool=False, rotary_base: Optional[int]=None):
         super().__init__()
-        self.embed_dim = embed_dim
         self.num_heads_q = num_heads_q
 
         assert embed_dim % num_heads_q == 0
         # Assuming head_dim = embed_dim / num_heads
-        self.head_dim = self.embed_dim // self.num_heads_q
+        self.head_dim = embed_dim // self.num_heads_q
 
         self.num_heads_kv = num_heads_kv
         assert num_heads_q % num_heads_kv == 0
         self.head_ratio = num_heads_q // num_heads_kv
 
         self.rotary_embedding = rotary_embedding
-        self.rotary_base = rotary_base
 
         if self.rotary_embedding:
-            if self.rotary_base is not None:
-                self.rotary_layer = layers.RotaryPositionEmbedding(self.head_dim, self.rotary_base)
+            if rotary_base is not None:
+                self.rotary_layer = layers.RotaryPositionEmbedding(self.head_dim, rotary_base)
             else:
                 self.rotary_layer = layers.RotaryPositionEmbedding(self.head_dim)
 
@@ -255,10 +242,7 @@ class GQABlock(nn.Module):
 class TransformerDecoderBlock(nn.Module):
     def __init__(self, embed_dim: int, num_heads: int, project_dim: int, activation: str, norm_type: str, num_heads_kv: Optional[int]=None, mlp_type: str='mlpblock', mha_type: str='mhablock', use_pre_norm: bool=True, parallel_layers: bool=False, dropout_rate: Optional[float]=None, rotary_embedding: bool=False, rotary_base: Optional[int]=None, rope_alternate: bool=False, mha_bias: bool=False, mlp_bias: bool=True, num_experts: Optional[int]=None, num_experts_used:Optional[int]=None):
         super().__init__()
-        self.embed_dim = embed_dim
         self.num_heads = num_heads
-
-        self.project_dim = project_dim
         self.activation = activation
 
         if norm_type == 'layer_norm':
@@ -267,35 +251,31 @@ class TransformerDecoderBlock(nn.Module):
             self.norm_type = layers.RMSNorm
         else:
             raise NotImplementedError("Normalization methods other than layer_norm and rms_norm have not been implemented.")
-        self.norm_layer1 = self.norm_type((self.embed_dim,))
+        self.norm_layer1 = self.norm_type((embed_dim,))
         if not parallel_layers or use_pre_norm:
-            self.norm_layer2 = self.norm_type((self.embed_dim,))
+            self.norm_layer2 = self.norm_type((embed_dim,))
         self.use_pre_norm = use_pre_norm
 
         self.dropout_rate = dropout_rate
 
         self.rotary_embedding = rotary_embedding
-        self.rotary_base = rotary_base
-        self.rope_alternate = rope_alternate
 
-        self.mha_bias = mha_bias
-        self.mlp_bias = mlp_bias
 
         if mha_type == 'mhablock':
-            self.mha_block = MultiheadAttentionBlock(embed_dim, num_heads, dropout_rate=self.dropout_rate, rotary_embedding=self.rotary_embedding, rotary_base=self.rotary_base, rope_alternate=self.rope_alternate, includes_bias=self.mha_bias)
+            self.mha_block = MultiheadAttentionBlock(embed_dim, num_heads, dropout_rate=self.dropout_rate, rotary_embedding=self.rotary_embedding, rotary_base=rotary_base, rope_alternate=rope_alternate, includes_bias=mha_bias)
         elif mha_type == 'gqablock':
-            self.mha_block = GQABlock(embed_dim, num_heads, num_heads_kv, rotary_embedding=self.rotary_embedding, rotary_base=self.rotary_base)
+            self.mha_block = GQABlock(embed_dim, num_heads, num_heads_kv, rotary_embedding=self.rotary_embedding, rotary_base=rotary_base)
         else:
             raise NotImplementedError("Attention types other than mhablock and gqablock have not been implemented.")
 
         if mlp_type == 'mlpblock':
-            self.mlp_block = MLPBlock(embed_dim, project_dim, activation, dropout_rate=self.dropout_rate, includes_bias=self.mlp_bias)
+            self.mlp_block = MLPBlock(embed_dim, project_dim, activation, dropout_rate=self.dropout_rate, includes_bias=mlp_bias)
         elif mlp_type == 'glublock':
-            self.mlp_block = GLUBlock(embed_dim, project_dim, activation, dropout_rate=self.dropout_rate, includes_bias=self.mlp_bias)
+            self.mlp_block = GLUBlock(embed_dim, project_dim, activation, dropout_rate=self.dropout_rate, includes_bias=mlp_bias)
         elif mlp_type == 'moeblock':
             assert num_experts is not None
             assert num_experts_used is not None
-            self.mlp_block = MixtureofExpertsBlock(num_experts, num_experts_used, embed_dim, project_dim, activation, includes_bias=self.mlp_bias)
+            self.mlp_block = MixtureofExpertsBlock(num_experts, num_experts_used, embed_dim, project_dim, activation, includes_bias=mlp_bias)
         else:
             raise NotImplementedError("MLP types other than mlpblock, glublock, and moeblock have not been implemented.")
 
