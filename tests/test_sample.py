@@ -2,7 +2,7 @@ import unittest
 import torch as t
 from transformers import GPT2Tokenizer, GPT2Model
 import einops
-from src import sample
+from src import sample, models
 
 
 
@@ -44,13 +44,6 @@ class TestModelSampling(unittest.TestCase):
         total_tensor = total_tensor / num_samples
         
         t.allclose(total_tensor, reference_probs, atol=3e-3, rtol=0)
-
-    def test_sample(self):
-        tokenizer = GPT2Tokenizer.from_pretrained('gpt2')
-        model = GPT2Model.from_pretrained('gpt2')
-
-        pass
-
 
 if __name__ == '__main__':
     unittest.main()
