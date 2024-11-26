@@ -1,9 +1,7 @@
 import unittest
 import torch as t
-from transformers import GPT2Tokenizer, GPT2Model
 import einops
-from src import sample, models
-
+from src import sample
 
 
 class TestModelSampling(unittest.TestCase):
