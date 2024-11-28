@@ -64,7 +64,6 @@ class TestTransformerComponents(unittest.TestCase):
         assert t.allclose(rn1(x), torch_rn1(x))
         assert t.allclose(rn2(x2), torch_rn2(x2))
 
-
     def test_embedding(self):
         num_embeddings = 10
         embedding_dim = 5
@@ -82,7 +81,6 @@ class TestTransformerComponents(unittest.TestCase):
 
         assert t.allclose(emb(tokens), torch_emb(tokens))
         assert t.allclose(emb(tokens2), torch_emb(tokens2))
-
 
     def test_linear(self):
         in_dim = 5
@@ -178,7 +176,6 @@ class TestTransformerComponents(unittest.TestCase):
 
         t.allclose(out[:,3:], out2)
 
-
     def test_mlp_blocks(self):
         embed_dim = 10
         project_dim = 40
@@ -206,8 +203,6 @@ class TestTransformerComponents(unittest.TestCase):
         assert t.allclose(mlp(x), torch_mlp(x), atol=1e-6)
         assert t.allclose(mlp(x2), torch_mlp(x2), atol=1e-6)
 
-        # TODO: Add GLU test
-    
     def test_moe_block(self):
         embed_dim = 8
         project_dim = 40
